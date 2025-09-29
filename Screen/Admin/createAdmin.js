@@ -16,6 +16,8 @@ import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
 import { userAPI } from '../../src/Services/conexion';
 
+
+//funxion de crear
 export default function CreateAdmin({ navigation }) {
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
