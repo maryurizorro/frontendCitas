@@ -1,22 +1,94 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+  Switch,
+  Button
 } from 'react-native';
 import { Colors } from '../../src/Components/Colors';
 import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
 import { useAuth } from '../../src/Context/AuthContext';
+import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function Profile({ navigation }) {
   const { user, logout } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
+  // 🔔 Estados para las notificaciones
+  const [permisoNotificaciones, setPermisoNotificaciones] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // 🔍 Verificar permisos
+  const checkPermisos = async () => {
+    const { status } = await Notifications.getPermissionsAsync();
+    const preferencia = await AsyncStorage.getItem('notificaciones_activas');
+    setPermisoNotificaciones(status === 'granted' && preferencia === 'true');
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    checkPermisos();
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      checkPermisos();
+    }, [])
+  );
+
+  // 🧠 Activar o desactivar notificaciones
+  const toggleSwitch = async (valor) => {
+    if (valor) {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status === 'granted') {
+        await AsyncStorage.setItem('notificaciones_activas', 'true');
+        setPermisoNotificaciones(true);
+        Alert.alert('✅ Notificaciones activadas');
+      } else {
+        await AsyncStorage.setItem('notificaciones_activas', 'false');
+        setPermisoNotificaciones(false);
+        Alert.alert('🚫 Permiso denegado');
+      }
+    } else {
+      await AsyncStorage.setItem('notificaciones_activas', 'false');
+      setPermisoNotificaciones(false);
+      Alert.alert('🔕 Notificaciones desactivadas');
+    }
+  };
+
+  // ⏰ Programar una notificación de prueba
+  const programarNotificacion = async () => {
+    const { status } = await Notifications.getPermissionsAsync();
+    const preferencia = await AsyncStorage.getItem('notificaciones_activas');
+    if (status !== 'granted' || preferencia !== 'true') {
+      Alert.alert('⚠️ No tiene permisos para recibir notificaciones');
+      return;
+    }
+
+    const trigger = new Date(Date.now() + 2 * 60 * 1000); // 2 minutos
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '📅 Notificación programada',
+          body: 'Esta es una notificación programada para 2 minutos después.',
+        },
+        trigger,
+      });
+      Alert.alert('✅ Notificación programada para 2 minutos después');
+    } catch (error) {
+      Alert.alert('❌ Error al programar la notificación', error.message);
+    }
+  };
+
+  // 🔴 Cerrar sesión
   const handleLogout = () => {
     Alert.alert(
       'Cerrar sesión',
@@ -42,6 +114,7 @@ export default function Profile({ navigation }) {
     );
   };
 
+  // 🎭 Roles
   const getRoleText = (role) => {
     switch (role) {
       case 'admin': return 'Administrador';
@@ -69,6 +142,7 @@ export default function Profile({ navigation }) {
     }
   };
 
+  // 🔁 Pantalla principal
   return (
     <ScrollView style={GlobalStyles.container} showsVerticalScrollIndicator={false}>
       {/* Header del perfil */}
@@ -115,11 +189,7 @@ export default function Profile({ navigation }) {
 
         <View style={[GlobalStyles.row, { alignItems: 'center', marginBottom: 16 }]}>
           <View style={[GlobalStyles.backgroundPastelBlue, { 
-            width: 40, 
-            height: 40, 
-            borderRadius: 20, 
-            ...GlobalStyles.center,
-            marginRight: 16
+            width: 40, height: 40, borderRadius: 20, ...GlobalStyles.center, marginRight: 16
           }]}>
             <Ionicons name="mail" size={20} color={Colors.primary} />
           </View>
@@ -135,11 +205,7 @@ export default function Profile({ navigation }) {
 
         <View style={[GlobalStyles.row, { alignItems: 'center', marginBottom: 16 }]}>
           <View style={[GlobalStyles.backgroundPastelGreen, { 
-            width: 40, 
-            height: 40, 
-            borderRadius: 20, 
-            ...GlobalStyles.center,
-            marginRight: 16
+            width: 40, height: 40, borderRadius: 20, ...GlobalStyles.center, marginRight: 16
           }]}>
             <Ionicons name="calendar" size={20} color={Colors.success} />
           </View>
@@ -156,11 +222,7 @@ export default function Profile({ navigation }) {
         {user?.specialty && (
           <View style={[GlobalStyles.row, { alignItems: 'center' }]}>
             <View style={[GlobalStyles.backgroundPastelYellow, { 
-              width: 40, 
-              height: 40, 
-              borderRadius: 20, 
-              ...GlobalStyles.center,
-              marginRight: 16
+              width: 40, height: 40, borderRadius: 20, ...GlobalStyles.center, marginRight: 16
             }]}>
               <Ionicons name="medical" size={20} color={Colors.warning} />
             </View>
@@ -176,36 +238,29 @@ export default function Profile({ navigation }) {
         )}
       </View>
 
-      {/* Acciones del perfil */}
+      {/* Configuración de notificaciones */}
       <View style={GlobalStyles.card}>
         <Text style={[GlobalStyles.subtitle, { marginBottom: 16 }]}>
-          Configuración
+          Notificaciones
         </Text>
 
-        <TouchableOpacity
-          style={[GlobalStyles.row, { alignItems: 'center', marginBottom: 16 }]}
-          onPress={() => navigation.navigate('AccountSettings')}
-        >
-          <View style={[GlobalStyles.backgroundPastelPink, {
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            ...GlobalStyles.center,
-            marginRight: 16
-          }]}>
-            <Ionicons name="settings" size={20} color={Colors.secondary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[GlobalStyles.text, { fontWeight: '600' }]}>
-              Configuración de cuenta
+        {loading ? (
+          <ActivityIndicator color={Colors.primary} />
+        ) : (
+          <View style={[GlobalStyles.center]}>
+            <Text style={[GlobalStyles.text, { marginBottom: 10 }]}>
+              Estado: {permisoNotificaciones ? ' Activadas' : ' Desactivadas'}
             </Text>
-            <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary }]}>
-              Editar información personal
-            </Text>
+            <Switch
+              value={permisoNotificaciones}
+              onValueChange={toggleSwitch}
+              thumbColor={permisoNotificaciones ? Colors.success : Colors.error}
+            />
+            <View style={{ marginTop: 20 }}>
+              <Button title="Programar notificación de prueba" onPress={programarNotificacion} />
+            </View>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
-        </TouchableOpacity>
-
+        )}
       </View>
 
       {/* Botón de cerrar sesión */}

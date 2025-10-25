@@ -15,19 +15,24 @@ import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
 import { specialtyAPI } from '../../src/Services/conexion';
 
+// Componente principal que gestiona las especialidades médicas
 export default function ManageSpecialties({ navigation }) {
-  const [specialties, setSpecialties] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newSpecialtyName, setNewSpecialtyName] = useState('');
-  const [newSpecialtyDescription, setNewSpecialtyDescription] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 🔹 Estados del componente
+  const [specialties, setSpecialties] = useState([]); // Lista de especialidades
+  const [isLoading, setIsLoading] = useState(true); // Controla el indicador de carga
+  const [refreshing, setRefreshing] = useState(false); // Controla el "pull to refresh"
+  const [showAddForm, setShowAddForm] = useState(false); // Muestra/oculta el formulario de agregar
+  const [newSpecialtyName, setNewSpecialtyName] = useState(''); // Nombre de nueva especialidad
+  const [newSpecialtyDescription, setNewSpecialtyDescription] = useState(''); // Descripción
+  const [isSubmitting, setIsSubmitting] = useState(false); // Controla el botón mientras se envía
+
+  //  useEffect para cargar las especialidades al iniciar la pantalla
   useEffect(() => {
     fetchSpecialties();
   }, []);
 
+  //  Función para obtener la lista de especialidades desde el backend
   const fetchSpecialties = async () => {
     try {
       const response = await specialtyAPI.getSpecialties();
@@ -42,19 +47,22 @@ export default function ManageSpecialties({ navigation }) {
     }
   };
 
+  //  Recarga de datos manual (pull to refresh)
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchSpecialties();
     setRefreshing(false);
   };
 
+  //  Agregar una nueva especialidad
   const addSpecialty = async () => {
+    // Validar que el nombre no esté vacío
     if (!newSpecialtyName.trim()) {
       NotificationService.showError('Error', 'Por favor ingresa el nombre de la especialidad');
       return;
     }
 
-    setIsSubmitting(true);
+    setIsSubmitting(true); // Bloquea el botón mientras se guarda
     try {
       const specialtyData = {
         name: newSpecialtyName.trim(),
@@ -64,12 +72,15 @@ export default function ManageSpecialties({ navigation }) {
       const response = await specialtyAPI.createSpecialty(specialtyData);
 
       if (response.data.success) {
+        // Actualiza la lista local con la nueva especialidad
         setSpecialties(prev => [...prev, response.data.data]);
+        // Limpia los campos
         setNewSpecialtyName('');
         setNewSpecialtyDescription('');
         setShowAddForm(false);
+        // Muestra notificación de éxito
         NotificationService.showSuccess('Especialidad creada', 'La especialidad ha sido agregada exitosamente');
-        // Refresh the list to ensure consistency
+        // Recarga la lista para mantener la consistencia
         fetchSpecialties();
       } else {
         NotificationService.showError('Error', response.data.message || 'No se pudo crear la especialidad');
@@ -83,6 +94,7 @@ export default function ManageSpecialties({ navigation }) {
     }
   };
 
+  //  Eliminar una especialidad con confirmación
   const deleteSpecialty = async (specialtyId, specialtyName) => {
     Alert.alert(
       'Eliminar especialidad',
@@ -96,6 +108,7 @@ export default function ManageSpecialties({ navigation }) {
             try {
               const response = await specialtyAPI.deleteSpecialty(specialtyId);
               if (response.data.success) {
+                // Elimina de la lista local
                 setSpecialties(prev => prev.filter(s => s.id !== specialtyId));
                 NotificationService.showSuccess('Especialidad eliminada', 'La especialidad ha sido eliminada exitosamente');
               } else {
@@ -111,6 +124,7 @@ export default function ManageSpecialties({ navigation }) {
     );
   };
 
+  //  Renderiza cada tarjeta de especialidad
   const renderSpecialty = ({ item }) => (
     <View style={[
       GlobalStyles.card,
@@ -121,6 +135,7 @@ export default function ManageSpecialties({ navigation }) {
         borderLeftColor: Colors.primary
       }
     ]}>
+      {/* Encabezado con nombre y botón de eliminar */}
       <View style={[GlobalStyles.row, GlobalStyles.spaceBetween, { marginBottom: 12 }]}>
         <View style={{ flex: 1 }}>
           <Text style={[GlobalStyles.text, { fontWeight: '600', marginBottom: 4 }]}>
@@ -140,6 +155,7 @@ export default function ManageSpecialties({ navigation }) {
         </TouchableOpacity>
       </View>
 
+      {/* Fecha de creación */}
       <View style={[GlobalStyles.row, { alignItems: 'center' }]}>
         <Ionicons name="calendar-outline" size={16} color={Colors.textSecondary} />
         <Text style={[GlobalStyles.textSmall, { marginLeft: 8 }]}>
@@ -149,12 +165,14 @@ export default function ManageSpecialties({ navigation }) {
     </View>
   );
 
+  //  Formulario para agregar una nueva especialidad
   const renderAddForm = () => (
     <View style={[GlobalStyles.card, { marginHorizontal: 16, marginVertical: 8 }]}>
       <Text style={[GlobalStyles.subtitle, { marginBottom: 16 }]}>
         Agregar nueva especialidad
       </Text>
       
+      {/* Campo de nombre */}
       <View style={{ marginBottom: 16 }}>
         <Text style={[GlobalStyles.textSmall, { marginBottom: 8, fontWeight: '600' }]}>
           Nombre de la especialidad *
@@ -168,6 +186,7 @@ export default function ManageSpecialties({ navigation }) {
         />
       </View>
 
+      {/* Campo de descripción */}
       <View style={{ marginBottom: 20 }}>
         <Text style={[GlobalStyles.textSmall, { marginBottom: 8, fontWeight: '600' }]}>
           Descripción (opcional)
@@ -183,6 +202,7 @@ export default function ManageSpecialties({ navigation }) {
         />
       </View>
 
+      {/* Botones de acción */}
       <View style={[GlobalStyles.row, { justifyContent: 'space-between' }]}>
         <TouchableOpacity
           style={[GlobalStyles.buttonSecondary, { flex: 1, marginRight: 8 }]}
@@ -214,6 +234,7 @@ export default function ManageSpecialties({ navigation }) {
     </View>
   );
 
+  // Estado vacío (cuando no hay especialidades)
   const renderEmptyState = () => (
     <View style={[GlobalStyles.center, { paddingVertical: 40 }]}>
       <Ionicons name="medical-outline" size={64} color={Colors.textLight} />
@@ -231,6 +252,7 @@ export default function ManageSpecialties({ navigation }) {
     </View>
   );
 
+  // Muestra un indicador de carga mientras se obtienen las especialidades
   if (isLoading) {
     return (
       <View style={[GlobalStyles.container, GlobalStyles.center]}>
@@ -239,9 +261,10 @@ export default function ManageSpecialties({ navigation }) {
     );
   }
 
+  // Estructura principal del componente
   return (
     <View style={GlobalStyles.container}>
-      {/* Header con botón de agregar */}
+      {/* Header con título y botón para mostrar/ocultar formulario */}
       <View style={[GlobalStyles.card, { marginBottom: 8 }]}>
         <View style={[GlobalStyles.row, GlobalStyles.spaceBetween, { alignItems: 'center' }]}>
           <Text style={GlobalStyles.subtitle}>
@@ -263,10 +286,10 @@ export default function ManageSpecialties({ navigation }) {
         </View>
       </View>
 
-      {/* Formulario de agregar */}
+      {/* Formulario de agregar nueva especialidad */}
       {showAddForm && renderAddForm()}
 
-      {/* Lista de especialidades */}
+      {/* Lista de especialidades existentes */}
       <FlatList
         data={specialties}
         keyExtractor={(item) => item.id.toString()}

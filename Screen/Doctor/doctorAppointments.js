@@ -14,21 +14,26 @@ import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
 import { appointmentAPI } from '../../src/Services/conexion';
 
+// Pantalla para que el doctor gestione sus citas (ver, confirmar, cancelar, completar, eliminar)
 export default function DoctorAppointments({ navigation }) {
-  const [appointments, setAppointments] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all'); // all, today, upcoming, past
 
+  // Estados principales
+  const [appointments, setAppointments] = useState([]); // Guarda todas las citas
+  const [isLoading, setIsLoading] = useState(true); // Muestra el spinner al cargar
+  const [refreshing, setRefreshing] = useState(false); // Controla el pull-to-refresh
+  const [filter, setFilter] = useState('all'); // Filtro actual: todas, hoy, próximas o pasadas
+
+  // Se ejecuta al montar el componente
   useEffect(() => {
     fetchAppointments();
   }, []);
 
+  // Obtiene las citas del doctor desde la API
   const fetchAppointments = async () => {
     try {
       const response = await appointmentAPI.getDoctorAppointments();
       if (response.data.success) {
-        setAppointments(response.data.data);
+        setAppointments(response.data.data); // Guarda las citas obtenidas
       }
     } catch (error) {
       console.log('Error fetching appointments:', error);
@@ -38,22 +43,36 @@ export default function DoctorAppointments({ navigation }) {
     }
   };
 
+  // Refresca la lista al deslizar hacia abajo
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchAppointments();
     setRefreshing(false);
   };
 
+  // Actualiza el estado de una cita (confirmar, cancelar o completar)
   const updateAppointmentStatus = async (appointmentId, newStatus) => {
     try {
       await appointmentAPI.updateAppointment(appointmentId, { status: newStatus });
       NotificationService.showSuccess('Estado actualizado', 'El estado de la cita ha sido actualizado');
-      fetchAppointments();
+
+      // Mostrar notificación del sistema con vibración para el paciente
+      if (newStatus === 'confirmed') {
+        const appointment = appointments.find(a => a.id === appointmentId);
+        if (appointment) {
+          NotificationService.showAppointmentNotification('confirmed', {
+            doctor_name: appointment.patient?.name + ' ' + appointment.patient?.surname,
+          });
+        }
+      }
+
+      fetchAppointments(); // Refresca la lista
     } catch (error) {
       NotificationService.showError('Error', 'No se pudo actualizar el estado');
     }
   };
 
+  // Confirmar cita (muestra alerta de confirmación)
   const confirmAppointment = (appointmentId) => {
     Alert.alert(
       'Confirmar cita',
@@ -68,6 +87,7 @@ export default function DoctorAppointments({ navigation }) {
     );
   };
 
+  // Cancelar cita (muestra alerta de confirmación)
   const cancelAppointment = (appointmentId) => {
     Alert.alert(
       'Cancelar cita',
@@ -83,6 +103,7 @@ export default function DoctorAppointments({ navigation }) {
     );
   };
 
+  // Marcar cita como completada
   const completeAppointment = (appointmentId) => {
     Alert.alert(
       'Completar cita',
@@ -97,6 +118,34 @@ export default function DoctorAppointments({ navigation }) {
     );
   };
 
+  // Eliminar una cita completamente
+  const deleteAppointment = async (appointmentId) => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    const isCancelled = appointment?.status === 'cancelled';
+
+    Alert.alert(
+      'Eliminar cita',
+      `¿Estás seguro de que quieres eliminar ${isCancelled ? 'esta cita cancelada' : 'esta cita'}? Esta acción no se puede deshacer.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await appointmentAPI.deleteAppointment(appointmentId);
+              NotificationService.showSuccess('Cita eliminada', 'La cita ha sido eliminada completamente del sistema');
+              fetchAppointments();
+            } catch (error) {
+              NotificationService.showError('Error', 'No se pudo eliminar la cita');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Formatea fecha a formato legible
   const formatDate = (dateString) => {
     if (!dateString) return 'Fecha no disponible';
     const date = new Date(dateString);
@@ -109,11 +158,13 @@ export default function DoctorAppointments({ navigation }) {
     });
   };
 
+  // Muestra solo hora (hh:mm)
   const formatTime = (timeString) => {
     if (!timeString) return '--:--';
     return timeString.substring(0, 5);
   };
 
+  // Colores según estado
   const getStatusColor = (status) => {
     switch (status) {
       case 'confirmed': return Colors.success;
@@ -124,6 +175,7 @@ export default function DoctorAppointments({ navigation }) {
     }
   };
 
+  // Texto legible según estado
   const getStatusText = (status) => {
     switch (status) {
       case 'confirmed': return 'Confirmada';
@@ -134,6 +186,7 @@ export default function DoctorAppointments({ navigation }) {
     }
   };
 
+  // Aplica filtros (todas, hoy, próximas o pasadas)
   const getFilteredAppointments = () => {
     const today = new Date().toISOString().split('T')[0];
     const todayDate = new Date();
@@ -165,9 +218,11 @@ export default function DoctorAppointments({ navigation }) {
     });
   };
 
+  // Renderiza cada cita en una tarjeta
   const renderAppointment = ({ item }) => {
     if (!item) return null;
 
+    // Controla qué botones se muestran según el estado
     const canConfirm = item.status === 'pending';
     const canComplete = item.status === 'confirmed';
     const canCancel = item.status === 'pending' || item.status === 'confirmed';
@@ -186,6 +241,7 @@ export default function DoctorAppointments({ navigation }) {
           borderLeftColor: getStatusColor(item.status || 'pending')
         }
       ]}>
+        {/* Encabezado con nombre del paciente y estado */}
         <View style={[GlobalStyles.row, GlobalStyles.spaceBetween, { marginBottom: 12 }]}>
           <View style={{ flex: 1 }}>
             <Text style={[GlobalStyles.text, { fontWeight: '600', marginBottom: 4 }]}>
@@ -193,6 +249,11 @@ export default function DoctorAppointments({ navigation }) {
             </Text>
             <Text style={[GlobalStyles.textSmall, { color: Colors.primary, marginBottom: 8 }]}>
               {item.specialty?.name || 'Especialidad no especificada'}
+              {item.specialty?.description && (
+                <Text style={[GlobalStyles.textSmall, { color: Colors.textLight, fontSize: 12, marginTop: 2 }]}>
+                  {item.specialty.description}
+                </Text>
+              )}
             </Text>
           </View>
           <View style={{
@@ -207,6 +268,7 @@ export default function DoctorAppointments({ navigation }) {
           </View>
         </View>
 
+        {/* Fecha y hora */}
         <View style={[GlobalStyles.row, { marginBottom: 12 }]}>
           <View style={[GlobalStyles.row, { flex: 1, alignItems: 'center' }]}>
             <Ionicons name="calendar-outline" size={16} color={Colors.textSecondary} />
@@ -222,6 +284,7 @@ export default function DoctorAppointments({ navigation }) {
           </View>
         </View>
 
+        {/* Notas opcionales */}
         {item.notes && (
           <View style={[GlobalStyles.backgroundPastelBlue, { padding: 12, borderRadius: 8, marginBottom: 12 }]}>
             <Text style={[GlobalStyles.textSmall, { fontStyle: 'italic' }]}>
@@ -230,59 +293,160 @@ export default function DoctorAppointments({ navigation }) {
           </View>
         )}
 
-        {/* Botones de acción */}
-        {!isPast && (canConfirm || canComplete || canCancel) && (
-          <View style={[GlobalStyles.row, { justifyContent: 'space-around', marginTop: 8 }]}>
-            {canConfirm && (
-              <TouchableOpacity
-                style={[GlobalStyles.buttonSecondary, { flex: 1, marginHorizontal: 4 }]}
-                onPress={() => confirmAppointment(item.id)}
-              >
-                <Text style={[GlobalStyles.buttonTextSecondary, { color: Colors.success }]}>
-                  Confirmar
-                </Text>
-              </TouchableOpacity>
-            )}
+        {/* Botones de acción según estado */}
+        {/* Estado: Pendiente - Solo Confirmar y Cancelar */}
+        {item.status === 'pending' && !isPast && (
+          <View style={[GlobalStyles.row, { justifyContent: 'space-around', gap: 8, marginTop: 8 }]}>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: '#d1fae5',
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: '#a7f3d0'
+              }}
+              onPress={() => confirmAppointment(item.id)}
+            >
+              <Ionicons name="checkmark-circle" size={16} color="#059669" style={{ marginBottom: 4 }} />
+              <Text style={{
+                color: '#059669',
+                fontWeight: '600',
+                fontSize: 11,
+                textTransform: 'uppercase'
+              }}>
+                Confirmar
+              </Text>
+            </TouchableOpacity>
 
-            {canComplete && (
-              <TouchableOpacity
-                style={[GlobalStyles.buttonSecondary, { flex: 1, marginHorizontal: 4 }]}
-                onPress={() => completeAppointment(item.id)}
-              >
-                <Text style={[GlobalStyles.buttonTextSecondary, { color: Colors.primary }]}>
-                  Completar
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            {canCancel && (
-              <TouchableOpacity
-                style={[GlobalStyles.buttonSecondary, { flex: 1, marginHorizontal: 4 }]}
-                onPress={() => cancelAppointment(item.id)}
-              >
-                <Text style={[GlobalStyles.buttonTextSecondary, { color: Colors.error }]}>
-                  Cancelar
-                </Text>
-              </TouchableOpacity>
-            )}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: '#fef3c7',
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: '#fde68a'
+              }}
+              onPress={() => cancelAppointment(item.id)}
+            >
+              <Ionicons name="close-circle" size={16} color="#d97706" style={{ marginBottom: 4 }} />
+              <Text style={{
+                color: '#d97706',
+                fontWeight: '600',
+                fontSize: 11,
+                textTransform: 'uppercase'
+              }}>
+                Cancelar
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
+
+        {/* Estado: Confirmada - Solo Cancelar y Completar */}
+        {item.status === 'confirmed' && !isPast && (
+          <View style={[GlobalStyles.row, { justifyContent: 'space-around', gap: 8, marginTop: 8 }]}>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: '#e0f2fe',
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: '#bae6fd'
+              }}
+              onPress={() => completeAppointment(item.id)}
+            >
+              <Ionicons name="checkmark-done-circle" size={16} color="#0369a1" style={{ marginBottom: 4 }} />
+              <Text style={{
+                color: '#0369a1',
+                fontWeight: '600',
+                fontSize: 11,
+                textTransform: 'uppercase'
+              }}>
+                Completar
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: '#fef3c7',
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 8,
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: '#fde68a'
+              }}
+              onPress={() => cancelAppointment(item.id)}
+            >
+              <Ionicons name="close-circle" size={16} color="#d97706" style={{ marginBottom: 4 }} />
+              <Text style={{
+                color: '#d97706',
+                fontWeight: '600',
+                fontSize: 11,
+                textTransform: 'uppercase'
+              }}>
+                Cancelar
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Estado: Cancelada - Solo Eliminar */}
+        {item.status === 'cancelled' && (
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#fee2e2',
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 8,
+              alignItems: 'center',
+              marginTop: 8,
+              borderWidth: 1,
+              borderColor: '#fecaca'
+            }}
+            onPress={() => deleteAppointment(item.id)}
+          >
+            <Ionicons name="trash-outline" size={16} color="#dc2626" style={{ marginBottom: 4 }} />
+            <Text style={{
+              color: '#dc2626',
+              fontWeight: '600',
+              fontSize: 11,
+              textTransform: 'uppercase'
+            }}>
+              Eliminar cita cancelada
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Estado: Completada - Sin botones */}
+        {item.status === 'completed' && null}
       </View>
     );
   };
 
+  // Vista vacía si no hay citas
   const renderEmptyState = () => (
     <View style={[GlobalStyles.center, { paddingVertical: 40 }]}>
       <Ionicons name="calendar-outline" size={64} color={Colors.textLight} />
       <Text style={[GlobalStyles.text, { color: Colors.textLight, marginTop: 16, textAlign: 'center' }]}>
-        {filter === 'all' && 'No tienes citas registradas'}
-        {filter === 'today' && 'No tienes citas programadas para hoy'}
-        {filter === 'upcoming' && 'No tienes citas próximas'}
-        {filter === 'past' && 'No tienes citas pasadas'}
+        {filter === 'all' ? 'No tienes citas registradas' :
+         filter === 'today' ? 'No tienes citas programadas para hoy' :
+         filter === 'upcoming' ? 'No tienes citas próximas' :
+         'No tienes citas pasadas'}
       </Text>
     </View>
   );
 
+  // Mientras carga, muestra spinner
   if (isLoading) {
     return (
       <View style={[GlobalStyles.container, GlobalStyles.center]}>
@@ -291,11 +455,12 @@ export default function DoctorAppointments({ navigation }) {
     );
   }
 
+  // Aplica el filtro actual
   const filteredAppointments = getFilteredAppointments();
 
   return (
     <View style={GlobalStyles.container}>
-      {/* Filtros */}
+      {/* Barra de filtros */}
       <View style={[GlobalStyles.card, { marginBottom: 8 }]}>
         <View style={[GlobalStyles.row, { justifyContent: 'space-around' }]}>
           {[
@@ -338,7 +503,7 @@ export default function DoctorAppointments({ navigation }) {
         </View>
       </View>
 
-      {/* Lista de citas */}
+      {/* Lista principal de citas */}
       <FlatList
         data={filteredAppointments}
         keyExtractor={(item) => item.id.toString()}

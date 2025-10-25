@@ -16,16 +16,35 @@ import { useAuth } from "../../src/Context/AuthContext";
 import { appointmentAPI, userAPI } from "../../src/Services/conexion";
 
 export default function DashboardPatient({ navigation }) {
-  const { user } = useAuth();
+  const { user: authUser } = useAuth();
+  const [user, setUser] = useState(null);
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [patientCount, setPatientCount] = useState(0);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await userAPI.getProfile();
+        if (response.data.success) {
+          setUser(response.data.data);
+        }
+      } catch (error) {
+        console.log('Error fetching profile:', error);
+        setUser(authUser);
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    };
+
+    if (authUser) {
+      fetchProfile();
+    }
     fetchUpcomingAppointments();
     fetchPatientCount();
-  }, []);
+  }, [authUser]);
 
   const fetchUpcomingAppointments = async () => {
     try {
@@ -102,13 +121,25 @@ export default function DashboardPatient({ navigation }) {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isLoadingProfile) {
     return (
       <View style={[GlobalStyles.container, GlobalStyles.center]}>
         <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={[GlobalStyles.text, { marginTop: 16 }]}>
+          {isLoadingProfile ? 'Cargando perfil...' : 'Cargando citas...'}
+        </Text>
       </View>
     );
   }
+
+  const getRoleText = (role) => {
+    switch (role) {
+      case 'admin': return 'Administrador';
+      case 'doctor': return 'Doctor';
+      case 'patient': return 'Paciente';
+      default: return role;
+    }
+  };
 
   return (
     <ScrollView
@@ -129,7 +160,10 @@ export default function DashboardPatient({ navigation }) {
         <View style={[GlobalStyles.row, GlobalStyles.spaceBetween, { alignItems: "center" }]}>
           <View style={{ flex: 1 }}>
             <Text style={{ color: "#fff", fontSize: 24, fontWeight: "700" }}>
-              ¡Hola, {user?.name}!
+              ¡Hola, {user?.name} {user?.surname}!
+            </Text>
+            <Text style={{ color: "#81c784", fontSize: 18, fontWeight: "600", marginTop: 4 }}>
+              {getRoleText(user?.role)}
             </Text>
             <Text style={{ color: "#cfd8dc", fontSize: 14, marginTop: 4 }}>
               Gestiona tus citas médicas fácilmente

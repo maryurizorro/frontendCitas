@@ -15,43 +15,50 @@ import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
 import { appointmentAPI } from '../../src/Services/conexion';
 
+// Pantalla para mostrar y gestionar las citas del usuario
 export default function AppointmentsScreen({ navigation }) {
-  const [appointments, setAppointments] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState('all'); // all, pending, cancelled, completed
+  // Estados principales
+  const [appointments, setAppointments] = useState([]); // Lista de citas
+  const [isLoading, setIsLoading] = useState(true); // Indicador de carga inicial
+  const [refreshing, setRefreshing] = useState(false); // Estado para refrescar lista
+  const [filter, setFilter] = useState('all'); // Filtro actual (todas, pendientes, etc.)
 
+  // Carga inicial de citas al montar el componente
   useEffect(() => {
     fetchAppointments();
   }, []);
 
+  // Se ejecuta cada vez que la pantalla vuelve al enfoque
   useFocusEffect(
     useCallback(() => {
-      // Refresh appointments when screen comes into focus
-      fetchAppointments();
+      fetchAppointments(); // Recarga citas al volver a la vista
     }, [])
   );
 
+  // Función para obtener las citas desde la API
   const fetchAppointments = async () => {
     try {
       const response = await appointmentAPI.myAppointments();
       if (response.data.success) {
-        setAppointments(response.data.data);
+        setAppointments(response.data.data || []); // Guarda las citas en el estado, asegurando que sea un array
       }
     } catch (error) {
       console.log('Error fetching appointments:', error);
       NotificationService.showError('Error', 'No se pudieron cargar las citas');
+      setAppointments([]); // Establece un array vacío en caso de error
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Quita el indicador de carga
     }
   };
 
+  // Refresca las citas con "pull to refresh"
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchAppointments();
     setRefreshing(false);
   };
 
+  // Cancela una cita específica
   const cancelAppointment = async (appointmentId) => {
     Alert.alert(
       'Cancelar cita',
@@ -63,9 +70,18 @@ export default function AppointmentsScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await appointmentAPI.deleteAppointment(appointmentId);
+              await appointmentAPI.deleteAppointment(appointmentId); // Llama a la API
               NotificationService.showSuccess('Cita cancelada', 'Tu cita ha sido cancelada exitosamente');
-              fetchAppointments();
+
+              // Mostrar notificación del sistema con vibración
+              const appointment = appointments.find(a => a.id === appointmentId);
+              if (appointment) {
+                NotificationService.showAppointmentNotification('cancelled', {
+                  doctor_name: appointment.doctor?.name + ' ' + appointment.doctor?.surname,
+                });
+              }
+
+              fetchAppointments(); // Recarga la lista de citas
             } catch (error) {
               NotificationService.showError('Error', 'No se pudo cancelar la cita');
             }
@@ -75,6 +91,7 @@ export default function AppointmentsScreen({ navigation }) {
     );
   };
 
+  // Formatea la fecha a formato legible
   const formatDate = (dateString) => {
     if (!dateString) return 'Fecha no disponible';
     const date = new Date(dateString);
@@ -87,6 +104,7 @@ export default function AppointmentsScreen({ navigation }) {
     });
   };
 
+  // Formatea la hora de la cita
   const formatTime = (appointmentDate) => {
     if (!appointmentDate) return '--:--';
     try {
@@ -102,16 +120,18 @@ export default function AppointmentsScreen({ navigation }) {
     }
   };
 
+  // Define color según el estado de la cita
   const getStatusColor = (status) => {
     switch (status) {
-      case 'confirmed': return Colors.success;
-      case 'pending': return Colors.warning;
-      case 'cancelled': return Colors.error;
-      case 'completed': return Colors.primary;
+      case 'confirmed': return '#4ade80'; // Verde pastel moderno
+      case 'pending': return '#fbbf24'; // Amarillo pastel moderno
+      case 'cancelled': return '#f87171'; // Rojo pastel moderno
+      case 'completed': return '#3b82f6'; // Azul pastel moderno
       default: return Colors.textSecondary;
     }
   };
 
+  // Texto del estado de la cita
   const getStatusText = (status) => {
     switch (status) {
       case 'confirmed': return 'Confirmada';
@@ -122,29 +142,43 @@ export default function AppointmentsScreen({ navigation }) {
     }
   };
 
-  const getFilteredAppointments = () => {
-    return appointments.filter(appointment => {
-      switch (filter) {
-        case 'pending':
-          return appointment.status === 'pending';
-        case 'cancelled':
-          return appointment.status === 'cancelled';
-        case 'completed':
-          return appointment.status === 'completed';
-        default:
-          return true;
-      }
-    }).sort((a, b) => new Date(a.appointment_date || a.date) - new Date(b.appointment_date || b.date));
+  // Función para aceptar cita (paciente)
+  const acceptAppointment = async (appointmentId) => {
+    try {
+      await appointmentAPI.updateAppointment(appointmentId, { status: 'confirmed' });
+      NotificationService.showSuccess('Cita aceptada', 'Tu cita ha sido confirmada exitosamente');
+      fetchAppointments(); // Recarga la lista
+    } catch (error) {
+      NotificationService.showError('Error', 'No se pudo aceptar la cita');
+    }
   };
 
+  // Aplica el filtro actual a la lista de citas
+  const getFilteredAppointments = () => {
+    return appointments
+      .filter(appointment => {
+        switch (filter) {
+          case 'pending': return appointment.status === 'pending';
+          case 'cancelled': return appointment.status === 'cancelled';
+          case 'completed': return appointment.status === 'completed';
+          case 'confirmed': return appointment.status === 'confirmed';
+          default: return true; // Todas
+        }
+      })
+      // Ordena por fecha
+      .sort((a, b) => new Date(a.appointment_date || a.date) - new Date(b.appointment_date || b.date));
+  };
+
+  // Renderiza una cita individual
   const renderAppointment = ({ item }) => {
     if (!item) return null;
 
+    // Determina si se puede cancelar la cita
     const canCancel = item.status === 'confirmed' || item.status === 'pending';
     const appointmentDate = item.appointment_date || item.date;
     const parsedDate = appointmentDate ? new Date(appointmentDate) : null;
     const today = new Date();
-    const isPast = parsedDate && parsedDate < today;
+    const isPast = parsedDate && parsedDate < today; // Verifica si ya pasó la cita
 
     return (
       <View style={[
@@ -156,6 +190,7 @@ export default function AppointmentsScreen({ navigation }) {
           borderLeftColor: getStatusColor(item.status || 'pending')
         }
       ]}>
+        {/* Información del doctor y estado */}
         <View style={[GlobalStyles.row, GlobalStyles.spaceBetween, { marginBottom: 12 }]}>
           <View style={{ flex: 1 }}>
             <Text style={[GlobalStyles.text, { fontWeight: '600', marginBottom: 4 }]}>
@@ -163,8 +198,15 @@ export default function AppointmentsScreen({ navigation }) {
             </Text>
             <Text style={[GlobalStyles.textSmall, { color: Colors.primary, marginBottom: 8 }]}>
               {item.specialty?.name || 'Especialidad no especificada'}
+              {item.specialty?.description && (
+                <Text style={[GlobalStyles.textSmall, { color: Colors.textLight, fontSize: 12, marginTop: 2 }]}>
+                  {item.specialty.description}
+                </Text>
+              )}
             </Text>
           </View>
+
+          {/* Estado visual de la cita */}
           <View style={{
             backgroundColor: getStatusColor(item.status || 'pending'),
             paddingHorizontal: 12,
@@ -177,6 +219,7 @@ export default function AppointmentsScreen({ navigation }) {
           </View>
         </View>
 
+        {/* Fecha y hora */}
         <View style={[GlobalStyles.row, { marginBottom: 12 }]}>
           <View style={[GlobalStyles.row, { flex: 1, alignItems: 'center' }]}>
             <Ionicons name="calendar-outline" size={16} color={Colors.textSecondary} />
@@ -192,6 +235,7 @@ export default function AppointmentsScreen({ navigation }) {
           </View>
         </View>
 
+        {/* Notas adicionales */}
         {item.notes && (
           <View style={[GlobalStyles.backgroundPastelBlue, { padding: 12, borderRadius: 8, marginBottom: 12 }]}>
             <Text style={[GlobalStyles.textSmall, { fontStyle: 'italic' }]}>
@@ -200,20 +244,143 @@ export default function AppointmentsScreen({ navigation }) {
           </View>
         )}
 
-        {canCancel && !isPast && (
+        {/* Botones según estado de la cita */}
+        {item.status === 'pending' && !isPast && (
+          <View style={[GlobalStyles.row, { justifyContent: 'space-around', gap: 8, marginTop: 8 }]}>
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: '#d1fae5',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                alignItems: 'center',
+                shadowColor: '#10b981',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+                elevation: 3,
+                borderWidth: 1,
+                borderColor: '#a7f3d0'
+              }}
+              onPress={() => acceptAppointment(item.id)}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#059669" style={{ marginBottom: 4 }} />
+              <Text style={{
+                color: '#059669',
+                fontWeight: '700',
+                fontSize: 12,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5
+              }}>
+                Aceptar cita
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: '#fef3c7',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                alignItems: 'center',
+                shadowColor: '#f59e0b',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+                elevation: 3,
+                borderWidth: 1,
+                borderColor: '#fde68a'
+              }}
+              onPress={() => cancelAppointment(item.id)}
+            >
+              <Ionicons name="close-circle" size={18} color="#d97706" style={{ marginBottom: 4 }} />
+              <Text style={{
+                color: '#d97706',
+                fontWeight: '700',
+                fontSize: 12,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5
+              }}>
+                Cancelar cita
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {item.status === 'confirmed' && !isPast && (
           <TouchableOpacity
-            style={[GlobalStyles.buttonSecondary, { marginTop: 8 }]}
+            style={{
+              backgroundColor: '#fef3c7',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 12,
+              alignItems: 'center',
+              marginTop: 8,
+              shadowColor: '#f59e0b',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+              elevation: 3,
+              borderWidth: 1,
+              borderColor: '#fde68a'
+            }}
             onPress={() => cancelAppointment(item.id)}
           >
-            <Text style={[GlobalStyles.buttonTextSecondary, { color: Colors.error }]}>
+            <Ionicons name="close-circle" size={18} color="#d97706" style={{ marginBottom: 4 }} />
+            <Text style={{
+              color: '#d97706',
+              fontWeight: '700',
+              fontSize: 12,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5
+            }}>
               Cancelar cita
             </Text>
           </TouchableOpacity>
         )}
+
+        {/* Estado: Cancelada - Solo Eliminar */}
+        {item.status === 'cancelled' && (
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#fee2e2',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 12,
+              alignItems: 'center',
+              marginTop: 8,
+              shadowColor: '#ef4444',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+              elevation: 3,
+              borderWidth: 1,
+              borderColor: '#fecaca'
+            }}
+            onPress={() => cancelAppointment(item.id)}
+          >
+            <Ionicons name="trash-outline" size={18} color="#dc2626" style={{ marginBottom: 4 }} />
+            <Text style={{
+              color: '#dc2626',
+              fontWeight: '700',
+              fontSize: 12,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5
+            }}>
+              Eliminar cita
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Estado: Completada - Sin botones (solo estado visible) */}
+        {item.status === 'completed' && null}
       </View>
     );
   };
 
+  // Estado cuando no hay citas
   const renderEmptyState = () => (
     <View style={[GlobalStyles.center, { paddingVertical: 40 }]}>
       <Ionicons name="calendar-outline" size={64} color={Colors.textLight} />
@@ -223,6 +390,7 @@ export default function AppointmentsScreen({ navigation }) {
         {filter === 'cancelled' && 'No tienes citas canceladas'}
         {filter === 'completed' && 'No tienes citas completadas'}
       </Text>
+      {/* Botón para reservar si no hay citas */}
       {filter === 'all' && (
         <TouchableOpacity 
           style={[GlobalStyles.buttonPrimary, { marginTop: 16 }]}
@@ -236,6 +404,7 @@ export default function AppointmentsScreen({ navigation }) {
     </View>
   );
 
+  // Muestra indicador de carga mientras obtiene datos
   if (isLoading) {
     return (
       <View style={[GlobalStyles.container, GlobalStyles.center]}>
@@ -244,44 +413,70 @@ export default function AppointmentsScreen({ navigation }) {
     );
   }
 
+  // Citas filtradas para mostrar en lista
   const filteredAppointments = getFilteredAppointments();
 
   return (
     <View style={GlobalStyles.container}>
-      {/* Filtros */}
-      <View style={[GlobalStyles.card, { marginBottom: 8 }]}>
-        <View style={[GlobalStyles.row, { justifyContent: 'space-around' }]}>
+      {/* Filtros superiores compactos */}
+      <View style={[GlobalStyles.card, {
+        marginBottom: 12,
+        marginHorizontal: 16,
+        marginTop: 16,
+        borderRadius: 16,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 4,
+        backgroundColor: '#ffffff',
+        paddingVertical: 12,
+        paddingHorizontal: 16
+      }]}>
+        <View style={[GlobalStyles.row, {
+          justifyContent: 'space-around',
+          flexWrap: 'wrap'
+        }]}>
           {[
             { key: 'all', label: 'Todas', icon: 'list' },
             { key: 'pending', label: 'Pendientes', icon: 'time' },
+            { key: 'confirmed', label: 'Confirmadas', icon: 'checkmark' },
             { key: 'cancelled', label: 'Canceladas', icon: 'close-circle' },
-            { key: 'completed', label: 'Completadas', icon: 'checkmark-circle' }
+            { key: 'completed', label: 'Completadas', icon: 'checkmark-done' }
           ].map((filterOption) => (
             <TouchableOpacity
               key={filterOption.key}
               style={[
                 GlobalStyles.center,
                 {
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 20,
+                  paddingVertical: 6,
+                  paddingHorizontal: 8,
+                  borderRadius: 16,
                   backgroundColor: filter === filterOption.key ? Colors.primary : 'transparent',
-                  minWidth: 80
+                  minWidth: 60,
+                  shadowColor: filter === filterOption.key ? Colors.primary : 'transparent',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: filter === filterOption.key ? 0.2 : 0,
+                  shadowRadius: 2,
+                  elevation: filter === filterOption.key ? 3 : 0
                 }
               ]}
-              onPress={() => setFilter(filterOption.key)}
+              onPress={() => setFilter(filterOption.key)} // Cambia el filtro
             >
-              <Ionicons 
-                name={filterOption.icon} 
-                size={16} 
-                color={filter === filterOption.key ? Colors.backgroundCard : Colors.textSecondary} 
+              <Ionicons
+                name={filterOption.icon}
+                size={14}
+                color={filter === filterOption.key ? '#ffffff' : Colors.textSecondary}
+                style={{ marginBottom: 1 }}
               />
               <Text style={[
                 GlobalStyles.textSmall,
                 {
-                  color: filter === filterOption.key ? Colors.backgroundCard : Colors.textSecondary,
-                  fontWeight: filter === filterOption.key ? '600' : '400',
-                  marginTop: 4
+                  color: filter === filterOption.key ? '#ffffff' : Colors.textSecondary,
+                  fontWeight: filter === filterOption.key ? '600' : '500',
+                  fontSize: 10,
+                  textAlign: 'center',
+                  lineHeight: 12
                 }
               ]}>
                 {filterOption.label}
@@ -291,7 +486,7 @@ export default function AppointmentsScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Lista de citas */}
+      {/* Lista de citas con scroll y refresco */}
       <FlatList
         data={filteredAppointments}
         keyExtractor={(item) => item.id.toString()}

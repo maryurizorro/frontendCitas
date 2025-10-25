@@ -1,31 +1,114 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Constants } from 'expo-constants';
 
-const API_BASE_URL = 'http://192.168.10.223:8000/api';
+// Configuración de URL base según el entorno
+const getApiBaseUrl = () => {
+  // En desarrollo (Expo Go) - usar IP de red local para acceso desde móvil/emulador
+  if (__DEV__) {
+    return 'http://10.2.234.181:8000/api';
+  }
+
+  // En producción (APK), usar una URL HTTPS confiable
+  // Cambia esta URL por tu dominio de producción
+  return 'https://tu-dominio-produccion.com/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 30000, // 30 segundos timeout
 });
 
 // Interceptor para agregar token automáticamente
 api.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  try {
+    const token = await AsyncStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+      console.log('API Request with token:', config.method?.toUpperCase(), config.url);
+    } else {
+      console.log('API Request without token:', config.method?.toUpperCase(), config.url);
+    }
+    return config;
+  } catch (error) {
+    console.error('Error in request interceptor:', error);
+    return config;
   }
-  return config;
 });
+
+// Interceptor para manejar respuestas y errores de autenticación
+api.interceptors.response.use(
+  (response) => {
+    console.log('API Response:', response.status, response.config.url);
+    return response;
+  },
+  async (error) => {
+    console.error('API Error:', error.response?.status, error.response?.data || error.message);
+
+    // Si es error 401 (no autorizado), limpiar token y redirigir a login
+    if (error.response?.status === 401) {
+      console.log('Token inválido o expirado, limpiando sesión...');
+      await AsyncStorage.removeItem('token');
+
+      // Solo mostrar error si no es un endpoint público
+      const publicEndpoints = ['/login', '/registro', '/especialidades'];
+      const isPublicEndpoint = publicEndpoints.some(endpoint =>
+        error.config.url.includes(endpoint)
+      );
+
+      if (!isPublicEndpoint) {
+        console.log('Redirigiendo a login por token inválido');
+        // Aquí podrías emitir un evento para redirigir al login
+      }
+    }
+
+    return Promise.reject(error);
+  }
+);
+
+// Interceptor para respuestas
+api.interceptors.response.use(
+  (response) => {
+    console.log('API Response:', response.status, response.config.url);
+    return response;
+  },
+  (error) => {
+    console.error('API Error:', error.response?.status, error.response?.data || error.message);
+
+    // Si es un error 401, intentar refrescar el token automáticamente
+    if (error.response?.status === 401 && !error.config._retry) {
+      console.log('Token expired, attempting to refresh...');
+      error.config._retry = true;
+
+      // Aquí podrías implementar lógica para refrescar el token
+      // Por ahora, solo logueamos y rechazamos
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 // ====================== AUTH ======================
 export const authAPI = {
   login: async (email, password) => {
-    const response = await api.post('/login', { email, password });
-    const token = response.data.token;
-    await AsyncStorage.setItem('token', token);
-    return response;
+    try {
+      const response = await api.post('/login', { email, password });
+      if (response.data.success && response.data.token) {
+        const token = response.data.token;
+        await AsyncStorage.setItem('token', token);
+        console.log('Token saved successfully');
+      }
+      return response;
+    } catch (error) {
+      console.error('Login API error:', error.response?.data);
+      throw error;
+    }
   },
 
   register: async (name, surname, email, password, password_confirmation, role, specialty_id) => {
@@ -56,9 +139,20 @@ export const appointmentAPI = {
   getAppointments: () => api.get('/todasLasCitas'),
   getAppointmentsBySpecialty: (params) => api.get('/citasPorEspecialidad', { params }),
   myAppointments: () => api.get('/misCitas'),
-  createAppointment: (data) => api.post('/crearCita', data),
+  createAppointment: async (data) => {
+    try {
+      console.log('Creating appointment with data:', data);
+      const response = await api.post('/crearCita', data);
+      console.log('Appointment created successfully:', response.data);
+      return response;
+    } catch (error) {
+      console.error('Create appointment API error:', error.response?.data);
+      throw error;
+    }
+  },
   updateAppointment: (id, data) => api.put(`/actualizarCita/${id}`, data),
   deleteAppointment: (id) => api.delete(`/eliminarCita/${id}`),
+  deletePastAppointments: () => api.delete('/eliminarCitasPasadas'),
   getAppointmentById: (id) => api.get(`/citaById/${id}`),
   rescheduleAppointment: (id, data) => api.put(`/reagendarCita/${id}`, data),
   getAvailableDoctors: (data) => api.get('/medicosDisponibles', { params: data }),

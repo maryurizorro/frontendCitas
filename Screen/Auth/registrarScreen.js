@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons'; 
 import { Picker } from '@react-native-picker/picker';
 import React, { useState, useEffect } from 'react';
 import {
@@ -11,22 +11,23 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { Colors } from '../../src/Components/Colors';
-import { NotificationService } from '../../src/Components/NotificationService';
-import { GlobalStyles } from '../../src/Components/Styles';
-import { useAuth } from '../../src/Context/AuthContext';
-import { authAPI, specialtyAPI } from '../../src/Services/conexion';
+import { Colors } from '../../src/Components/Colors'; 
+import { NotificationService } from '../../src/Components/NotificationService'; 
+import { GlobalStyles } from '../../src/Components/Styles'; 
+import { useAuth } from '../../src/Context/AuthContext'; 
+import { authAPI, specialtyAPI } from '../../src/Services/conexion'; 
 
 export default function RegistrarScreen({ navigation }) {
+  // Estados para almacenar los datos del formulario
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [password_confirmation, setPasswordConfirmation] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const { login } = useAuth();
+  const [isLoading, setIsLoading] = useState(false); // Controla el indicador de carga
+  const [showPassword, setShowPassword] = useState(false); // Alterna visibilidad de contraseña
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false); // Alterna visibilidad de confirmación
+  const { login } = useAuth(); // Función para guardar sesión del usuario
 
   const validateForm = () => {
     if (!name || !surname || !email || !password || !password_confirmation) {
@@ -39,63 +40,74 @@ export default function RegistrarScreen({ navigation }) {
       return false;
     }
 
+    // Revisa longitud mínima de la contraseña
     if (password.length < 6) {
       NotificationService.showError('Error', 'La contraseña debe tener al menos 6 caracteres');
       return false;
     }
 
-
     return true;
   };
 
+  // Función para registrar un nuevo usuario
   const handleRegister = async () => {
-    if (!validateForm()) return;
+    if (!validateForm()) return; // Si falla la validación, se detiene
 
-    setIsLoading(true);
+    setIsLoading(true); // Muestra el indicador de carga
     try {
+      // Llama al endpoint de registro en el backend
       const response = await authAPI.register(
         name,
         surname,
         email,
         password,
         password_confirmation,
-        'patient', // Only patients can register
-        null // No specialty for patients
+        'patient', // Solo se permite registrar pacientes
+        null // Sin especialidad (solo aplica a doctores)
       );
 
+      // Si el backend responde con éxito
       if (response.data.success) {
-        await login(response.data.usuario, response.data.token);
+        await login(response.data.usuario, response.data.token); // Guarda usuario y token
         NotificationService.showSuccess('¡Registro exitoso!', 'Tu cuenta ha sido creada correctamente');
       } else {
+        // Si el backend responde con error lógico
         NotificationService.showError('Error', response.data.message || 'No se pudo completar el registro');
       }
     } catch (error) {
+      // Captura errores del servidor o de red
       console.log("Error en el registro:", error.response?.data || error.message);
 
       const errores = error.response?.data?.errors;
       if (errores) {
+        // Si hay errores de validación, los muestra todos
         const mensajes = Object.values(errores).flat().join("\n");
         NotificationService.showError('Error de validación', mensajes);
       } else {
+        // Si hay un error general del servidor
         const message = error.response?.data?.message || "No se pudo completar el registro. Verifique los datos.";
         NotificationService.showError('Error', message);
       }
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Quita el indicador de carga
     }
   };
 
   return (
+    // Evita que el teclado cubra los campos en iOS y Android
     <KeyboardAvoidingView 
       style={GlobalStyles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* Scroll permite moverse si hay muchos campos o el teclado aparece */}
       <ScrollView 
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Contenedor del formulario */}
         <View style={[GlobalStyles.card, { width: '100%', maxWidth: 400, alignSelf: 'center' }]}>
-          {/* Logo/Icono */}
+
+          {/* Logo o ícono superior */}
           <View style={[GlobalStyles.center, { marginBottom: 20 }]}>
             <View style={[GlobalStyles.backgroundPastelPink, { 
               width: 60, 
@@ -107,12 +119,13 @@ export default function RegistrarScreen({ navigation }) {
             </View>
           </View>
 
+          {/* Título y descripción del formulario */}
           <Text style={GlobalStyles.title}>Crear Cuenta</Text>
           <Text style={[GlobalStyles.text, { textAlign: 'center', marginBottom: 30 }]}>
             Únete a nuestra plataforma de citas médicas
           </Text>
 
-          {/* Nombre y Apellido en fila */}
+          {/* Inputs: Nombre y Apellido lado a lado */}
           <View style={[GlobalStyles.row, { marginBottom: 16 }]}>
             <View style={{ flex: 1, marginRight: 8 }}>
               <Text style={[GlobalStyles.textSmall, { marginBottom: 8, fontWeight: '600' }]}>
@@ -140,7 +153,7 @@ export default function RegistrarScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Email */}
+          {/* Input: Correo electrónico */}
           <View style={{ marginBottom: 16 }}>
             <Text style={[GlobalStyles.textSmall, { marginBottom: 8, fontWeight: '600' }]}>
               Correo electrónico
@@ -156,7 +169,7 @@ export default function RegistrarScreen({ navigation }) {
             />
           </View>
 
-          {/* Contraseña */}
+          {/* Input: Contraseña */}
           <View style={{ marginBottom: 16 }}>
             <Text style={[GlobalStyles.textSmall, { marginBottom: 8, fontWeight: '600' }]}>
               Contraseña
@@ -170,6 +183,7 @@ export default function RegistrarScreen({ navigation }) {
                 style={GlobalStyles.input}
                 placeholderTextColor={Colors.textLight}
               />
+              {/* Botón para mostrar/ocultar contraseña */}
               <TouchableOpacity
                 onPress={() => setShowPassword(!showPassword)}
                 style={{ position: 'absolute', right: 16, top: 16 }}
@@ -183,7 +197,7 @@ export default function RegistrarScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Confirmar Contraseña */}
+          {/* Input: Confirmar contraseña */}
           <View style={{ marginBottom: 16 }}>
             <Text style={[GlobalStyles.textSmall, { marginBottom: 8, fontWeight: '600' }]}>
               Confirmar contraseña
@@ -197,6 +211,7 @@ export default function RegistrarScreen({ navigation }) {
                 style={GlobalStyles.input}
                 placeholderTextColor={Colors.textLight}
               />
+              {/* Botón para mostrar/ocultar confirmación */}
               <TouchableOpacity
                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                 style={{ position: 'absolute', right: 16, top: 16 }}
@@ -210,21 +225,20 @@ export default function RegistrarScreen({ navigation }) {
             </View>
           </View>
 
-
-          {/* Register Button */}
+          {/* Botón para crear cuenta */}
           <TouchableOpacity
             style={[GlobalStyles.buttonPrimary, { opacity: isLoading ? 0.7 : 1 }]}
             onPress={handleRegister}
             disabled={isLoading}
           >
             {isLoading ? (
-              <ActivityIndicator color={Colors.backgroundCard} />
+              <ActivityIndicator color={Colors.backgroundCard} /> // Muestra spinner de carga
             ) : (
               <Text style={GlobalStyles.buttonText}>Crear Cuenta</Text>
             )}
           </TouchableOpacity>
 
-          {/* Login Link */}
+          {/* Enlace para ir al login si ya tiene cuenta */}
           <View style={[GlobalStyles.center, { marginTop: 20 }]}>
             <Text style={GlobalStyles.textSmall}>
               ¿Ya tienes una cuenta?{' '}

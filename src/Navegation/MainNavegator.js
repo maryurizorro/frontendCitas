@@ -8,19 +8,24 @@ import PatientNavigator from "./PatientNavigator";
 const Stack = createNativeStackNavigator();
 
 export default function MainNavigator() {
-  const { isPatient, isDoctor, isAdmin } = useAuth();
+  const { user } = useAuth();
+
+  // Determinar el componente basado en el rol del usuario
+  let InitialComponent;
+  if (user?.role === 'patient') {
+    InitialComponent = PatientNavigator;
+  } else if (user?.role === 'doctor') {
+    InitialComponent = DoctorNavigator;
+  } else if (user?.role === 'admin') {
+    InitialComponent = AdminNavigator;
+  } else {
+    // Fallback por si no hay rol definido
+    InitialComponent = PatientNavigator;
+  }
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {isPatient() && (
-        <Stack.Screen name="Patient" component={PatientNavigator} />
-      )}
-      {isDoctor() && (
-        <Stack.Screen name="Doctor" component={DoctorNavigator} />
-      )}
-      {isAdmin() && (
-        <Stack.Screen name="Admin" component={AdminNavigator} />
-      )}
+      <Stack.Screen name="Main" component={InitialComponent} />
     </Stack.Navigator>
   );
 }
