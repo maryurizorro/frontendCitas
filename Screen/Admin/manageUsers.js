@@ -13,19 +13,28 @@ import { Colors } from '../../src/Components/Colors';
 import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
 import { userAPI } from '../../src/Services/conexion';
+import { useAuth } from '../../src/Context/AuthContext';
 
 // Componente principal para gestionar usuarios
 export default function ManageUsers({ navigation }) {
+  const { isAdmin } = useAuth();
 
   // Estados locales del componente
   const [users, setUsers] = useState([]); // Lista de usuarios
   const [isLoading, setIsLoading] = useState(true); // Indicador de carga inicial
   const [refreshing, setRefreshing] = useState(false); // Control del "pull to refresh"
   const [activeTab, setActiveTab] = useState('doctors'); // Pestaña activa
+  const [accessDenied, setAccessDenied] = useState(false); // Estado para acceso denegado
 
   // useEffect para cargar usuarios al montar el componente
   useEffect(() => {
-    fetchUsers();
+    if (isAdmin()) {
+      fetchUsers();
+    } else {
+      setAccessDenied(true);
+      setIsLoading(false);
+      NotificationService.showError('Acceso denegado', 'No tienes permisos para acceder a esta función.');
+    }
   }, []);
 
   // Función para obtener la lista de usuarios desde la API
@@ -33,7 +42,13 @@ export default function ManageUsers({ navigation }) {
     try {
       const response = await userAPI.getUsers(); // Llamada al endpoint de usuarios
       if (response.data.success) {
-        setUsers(response.data.data); // Guardamos los usuarios en el estado
+        // Forzar refresh de datos para asegurar que las especialidades se muestren correctamente
+        const refreshedUsers = response.data.data.map(user => ({
+          ...user,
+          // Asegurar que specialty esté disponible
+          specialty: user.specialty || null
+        }));
+        setUsers(refreshedUsers); // Guardamos los usuarios en el estado
       }
     } catch (error) {
       console.log('Error fetching users:', error);
@@ -119,6 +134,21 @@ export default function ManageUsers({ navigation }) {
     </View>
   );
 
+  // Si acceso denegado, muestra mensaje
+  if (accessDenied) {
+    return (
+      <View style={[GlobalStyles.container, GlobalStyles.center]}>
+        <Ionicons name="shield-outline" size={64} color={Colors.error} />
+        <Text style={[GlobalStyles.text, { color: Colors.error, marginTop: 16, textAlign: 'center' }]}>
+          Acceso denegado
+        </Text>
+        <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary, textAlign: 'center' }]}>
+          No tienes permisos para gestionar usuarios.
+        </Text>
+      </View>
+    );
+  }
+
   // Si está cargando, muestra spinner
   if (isLoading) {
     return (
@@ -154,6 +184,11 @@ export default function ManageUsers({ navigation }) {
           {item.specialty && (
             <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary }]}>
               {item.specialty.name}
+              {item.specialty.description && (
+                <Text style={[GlobalStyles.textSmall, { color: Colors.textLight, fontSize: 12, marginTop: 2 }]}>
+                  {item.specialty.description}
+                </Text>
+              )}
             </Text>
           )}
           {/* Información adicional según rol */}

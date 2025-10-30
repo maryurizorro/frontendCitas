@@ -21,7 +21,6 @@ export default function DashboardPatient({ navigation }) {
   const [upcomingAppointments, setUpcomingAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [patientCount, setPatientCount] = useState(0);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
 
   useEffect(() => {
@@ -43,19 +42,20 @@ export default function DashboardPatient({ navigation }) {
       fetchProfile();
     }
     fetchUpcomingAppointments();
-    fetchPatientCount();
   }, [authUser]);
 
   const fetchUpcomingAppointments = async () => {
     try {
       const response = await appointmentAPI.myAppointments();
       if (response.data.success) {
-        const upcoming = response.data.appointments.filter((apt) => {
-          const appointmentDate = new Date(apt.date);
-          const today = new Date();
-          const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-          return appointmentDate >= today && appointmentDate <= weekFromNow;
-        });
+        const upcoming = response.data.data
+          .filter(apt => apt.status !== 'pending')
+          .filter((apt) => {
+            const appointmentDate = new Date(apt.appointment_date || apt.date);
+            const today = new Date();
+            const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+            return appointmentDate >= today && appointmentDate <= weekFromNow;
+          });
         setUpcomingAppointments(upcoming.slice(0, 3));
       }
     } catch (error) {
@@ -65,21 +65,9 @@ export default function DashboardPatient({ navigation }) {
     }
   };
 
-  const fetchPatientCount = async () => {
-    try {
-      const response = await userAPI.getPatients();
-      if (response.data.success) {
-        setPatientCount(response.data.data.length);
-      }
-    } catch (error) {
-      console.log('Error fetching patient count:', error);
-    }
-  };
-
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchUpcomingAppointments();
-    await fetchPatientCount();
     setRefreshing(false);
   };
 
@@ -93,7 +81,7 @@ export default function DashboardPatient({ navigation }) {
     });
   };
 
-  const formatTime = (timeString) => timeString.substring(0, 5);
+  const formatTime = (timeString) => timeString ? timeString.substring(0, 5) : '--:--';
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -121,6 +109,15 @@ export default function DashboardPatient({ navigation }) {
     }
   };
 
+  const getRoleText = (role) => {
+    switch (role) {
+      case 'admin': return 'Administrador';
+      case 'doctor': return 'Doctor';
+      case 'patient': return 'Paciente';
+      default: return role;
+    }
+  };
+
   if (isLoading || isLoadingProfile) {
     return (
       <View style={[GlobalStyles.container, GlobalStyles.center]}>
@@ -132,61 +129,73 @@ export default function DashboardPatient({ navigation }) {
     );
   }
 
-  const getRoleText = (role) => {
-    switch (role) {
-      case 'admin': return 'Administrador';
-      case 'doctor': return 'Doctor';
-      case 'patient': return 'Paciente';
-      default: return role;
-    }
-  };
-
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: "#f7f9fc" }}
+      style={{ flex: 1, backgroundColor: "#f5f7fa" }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       showsVerticalScrollIndicator={false}
     >
       {/* Header elegante */}
       <View
         style={{
-          backgroundColor: "#0d47a1",
-          padding: 24,
-          borderBottomLeftRadius: 24,
-          borderBottomRightRadius: 24,
-          marginBottom: 20,
+          backgroundColor: "#1565c0",
+          paddingVertical: 40,
+          paddingHorizontal: 24,
+          borderBottomLeftRadius: 32,
+          borderBottomRightRadius: 32,
+          alignItems: "center",
+          marginBottom: 30,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 5,
         }}
       >
-        <View style={[GlobalStyles.row, GlobalStyles.spaceBetween, { alignItems: "center" }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: "#fff", fontSize: 24, fontWeight: "700" }}>
-              ¡Hola, {user?.name} {user?.surname}!
-            </Text>
-            <Text style={{ color: "#81c784", fontSize: 18, fontWeight: "600", marginTop: 4 }}>
-              {getRoleText(user?.role)}
-            </Text>
-            <Text style={{ color: "#cfd8dc", fontSize: 14, marginTop: 4 }}>
-              Gestiona tus citas médicas fácilmente
-            </Text>
-          </View>
-          <View
-            style={{
-              width: 70,
-              height: 70,
-              borderRadius: 35,
-              backgroundColor: "#1565c0",
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <Ionicons name="person-circle" size={36} color="#fff" />
-          </View>
+        <View
+          style={{
+            width: 110,
+            height: 110,
+            borderRadius: 55,
+            backgroundColor: "#1e88e5",
+            justifyContent: "center",
+            alignItems: "center",
+            marginBottom: 15,
+            shadowColor: "#000",
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
+            elevation: 5,
+          }}
+        >
+          <Ionicons name="person-circle-outline" size={70} color="#fff" />
+        </View>
+
+        <Text style={{ color: "#fff", fontSize: 26, fontWeight: "700", textAlign: "center" }}>
+          {user?.name} {user?.surname}
+        </Text>
+        <Text style={{ color: "#bbdefb", fontSize: 18, marginTop: 4 }}>
+          {getRoleText(user?.role)}
+        </Text>
+        <Text style={{ color: "#e3f2fd", fontSize: 14, marginTop: 6 }}>
+          Gestiona tus citas médicas fácilmente
+        </Text>
+
+        {/* 🕓 Miembro desde */}
+        <View style={{ marginTop: 10 }}>
+          <Text style={{ color: "#fff", fontSize: 14 }}>
+            Miembro desde:{" "}
+            {user?.created_at
+              ? new Date(user.created_at).toLocaleDateString("es-ES")
+              : "N/A"}
+          </Text>
         </View>
       </View>
 
       {/* Acciones rápidas */}
-      <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
-        <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 12 }}>Acciones rápidas</Text>
+      <View style={{ paddingHorizontal: 20, marginBottom: 25 }}>
+        <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 16, color: "#1a237e" }}>
+          Acciones rápidas
+        </Text>
         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
           <TouchableOpacity
             style={{
@@ -199,7 +208,7 @@ export default function DashboardPatient({ navigation }) {
               shadowColor: "#000",
               shadowOpacity: 0.1,
               shadowRadius: 10,
-              elevation: 5,
+              elevation: 4,
             }}
             onPress={() => navigation.navigate("Book")}
           >
@@ -219,7 +228,7 @@ export default function DashboardPatient({ navigation }) {
               shadowColor: "#000",
               shadowOpacity: 0.1,
               shadowRadius: 10,
-              elevation: 5,
+              elevation: 4,
             }}
             onPress={() => navigation.navigate("Appointments")}
           >
@@ -230,7 +239,7 @@ export default function DashboardPatient({ navigation }) {
           <TouchableOpacity
             style={{
               flex: 1,
-              backgroundColor: "#ff5722",
+              backgroundColor: "#455a64",
               borderRadius: 16,
               padding: 16,
               marginLeft: 8,
@@ -238,20 +247,20 @@ export default function DashboardPatient({ navigation }) {
               shadowColor: "#000",
               shadowOpacity: 0.1,
               shadowRadius: 10,
-              elevation: 5,
+              elevation: 4,
             }}
             onPress={() => navigation.navigate("Profile")}
           >
-            <Ionicons name="settings" size={32} color="#fff" />
+            <Ionicons name="person" size={32} color="#fff" />
             <Text style={{ color: "#fff", fontWeight: "600", marginTop: 8 }}>Perfil</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Próximas citas */}
-      <View style={{ paddingHorizontal: 16, marginBottom: 20 }}>
+      <View style={{ paddingHorizontal: 20, marginBottom: 30 }}>
         <View style={[GlobalStyles.row, GlobalStyles.spaceBetween, { marginBottom: 12 }]}>
-          <Text style={{ fontSize: 18, fontWeight: "700" }}>Próximas citas</Text>
+          <Text style={{ fontSize: 18, fontWeight: "700", color: "#1a237e" }}>Próximas citas</Text>
           <TouchableOpacity onPress={() => navigation.navigate("Appointments")}>
             <Text style={{ color: "#1976d2", fontWeight: "600" }}>Ver todas</Text>
           </TouchableOpacity>
@@ -263,25 +272,25 @@ export default function DashboardPatient({ navigation }) {
               key={appointment.id}
               style={{
                 backgroundColor: "#fff",
-                padding: 16,
+                padding: 18,
                 borderRadius: 16,
                 marginBottom: 12,
                 shadowColor: "#000",
-                shadowOpacity: 0.05,
+                shadowOpacity: 0.08,
                 shadowRadius: 10,
                 elevation: 3,
                 borderLeftWidth: 5,
                 borderLeftColor: getStatusColor(appointment.status),
               }}
             >
-              <Text style={{ fontWeight: "700", fontSize: 16, marginBottom: 4 }}>
+              <Text style={{ fontWeight: "700", fontSize: 16, marginBottom: 4, color: "#0d47a1" }}>
                 Dr. {appointment.doctor?.name} {appointment.doctor?.surname}
               </Text>
               <Text style={{ fontSize: 14, color: "#607d8b", marginBottom: 2 }}>
                 {appointment.specialty?.name}
               </Text>
-              <Text style={{ fontSize: 14, color: "#607d8b" }}>📅 {formatDate(appointment.date)}</Text>
-              <Text style={{ fontSize: 14, color: "#607d8b" }}>🕐 {formatTime(appointment.time)}</Text>
+              <Text style={{ fontSize: 14, color: "#455a64" }}>📅 {formatDate(appointment.date)}</Text>
+              <Text style={{ fontSize: 14, color: "#455a64" }}>🕐 {formatTime(appointment.time)}</Text>
               <View
                 style={{
                   backgroundColor: getStatusColor(appointment.status),
@@ -299,7 +308,7 @@ export default function DashboardPatient({ navigation }) {
         ) : (
           <View style={{ alignItems: "center", paddingVertical: 20 }}>
             <Ionicons name="calendar-outline" size={48} color="#cfd8dc" />
-            <Text style={{ color: "#b0bec5", marginTop: 8, fontWeight: "600" }}>No tienes citas próximas</Text>
+            <Text style={{ color: "#90a4ae", marginTop: 8, fontWeight: "600" }}>No tienes citas próximas</Text>
             <TouchableOpacity
               style={{
                 backgroundColor: "#1976d2",
@@ -317,12 +326,14 @@ export default function DashboardPatient({ navigation }) {
       </View>
 
       {/* Información útil */}
-      <View style={{ paddingHorizontal: 16, marginBottom: 40 }}>
-        <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 12 }}>Información útil</Text>
+      <View style={{ paddingHorizontal: 20, marginBottom: 40 }}>
+        <Text style={{ fontSize: 18, fontWeight: "700", marginBottom: 12, color: "#1a237e" }}>
+          Información útil
+        </Text>
 
         <View
           style={{
-            backgroundColor: "#e0f7fa",
+            backgroundColor: "#e3f2fd",
             padding: 16,
             borderRadius: 16,
             marginBottom: 12,
@@ -333,8 +344,8 @@ export default function DashboardPatient({ navigation }) {
           }}
         >
           <View style={[GlobalStyles.row, { alignItems: "center" }]}>
-            <Ionicons name="information-circle" size={24} color="#009688" style={{ marginRight: 12 }} />
-            <Text style={{ fontWeight: "600", color: "#004d40", flex: 1 }}>
+            <Ionicons name="information-circle" size={24} color="#1565c0" style={{ marginRight: 12 }} />
+            <Text style={{ fontWeight: "600", color: "#0d47a1", flex: 1 }}>
               Llega 15 minutos antes de tu cita y trae tu documento de identidad.
             </Text>
           </View>
@@ -353,7 +364,7 @@ export default function DashboardPatient({ navigation }) {
         >
           <View style={[GlobalStyles.row, { alignItems: "center" }]}>
             <Ionicons name="call" size={24} color="#ff9800" style={{ marginRight: 12 }} />
-            <Text style={{ fontWeight: "600", color: "#bf360c", flex: 1 }}>
+            <Text style={{ fontWeight: "600", color: "#e65100", flex: 1 }}>
               Contacta con nosotros al 123-456-7890 para cualquier consulta.
             </Text>
           </View>

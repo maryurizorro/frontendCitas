@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons'; 
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
@@ -13,18 +13,28 @@ import { Colors } from '../../src/Components/Colors';
 import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
 import { appointmentAPI } from '../../src/Services/conexion';
+import { useAuth } from '../../src/Context/AuthContext';
 
 // Componente principal para gestionar las citas médicas
 export default function ManageAppointments({ navigation }) {
+  const { isAdmin } = useAuth();
+
   // Estados del componente
   const [appointments, setAppointments] = useState([]); // Lista de citas
   const [isLoading, setIsLoading] = useState(true); // Indicador de carga inicial
   const [refreshing, setRefreshing] = useState(false); // Indicador para recargar la lista
   const [filter, setFilter] = useState('all'); // Filtro activo (todas, hoy, pendientes, etc.)
+  const [accessDenied, setAccessDenied] = useState(false); // Estado para acceso denegado
 
   // Se ejecuta al montar el componente
   useEffect(() => {
-    fetchAppointments();
+    if (isAdmin()) {
+      fetchAppointments();
+    } else {
+      setAccessDenied(true);
+      setIsLoading(false);
+      NotificationService.showError('Acceso denegado', 'No tienes permisos para acceder a esta función.');
+    }
   }, []);
 
   // Función para obtener las citas desde la API
@@ -53,7 +63,12 @@ export default function ManageAppointments({ navigation }) {
     try {
       await appointmentAPI.updateAppointment(appointmentId, { status: newStatus });
       NotificationService.showSuccess('Estado actualizado', 'El estado de la cita ha sido actualizado');
-      fetchAppointments(); // Actualiza la lista después del cambio
+      // Actualizar el estado local sin recargar
+      setAppointments(prevAppointments =>
+        prevAppointments.map(apt =>
+          apt.id === appointmentId ? { ...apt, status: newStatus } : apt
+        )
+      );
     } catch (error) {
       NotificationService.showError('Error', 'No se pudo actualizar el estado');
     }
@@ -73,7 +88,10 @@ export default function ManageAppointments({ navigation }) {
             try {
               await appointmentAPI.deleteAppointment(appointmentId);
               NotificationService.showSuccess('Cita eliminada', 'La cita ha sido eliminada exitosamente');
-              fetchAppointments(); // Recarga la lista
+              // Actualizar el estado local sin recargar
+              setAppointments(prevAppointments =>
+                prevAppointments.filter(apt => apt.id !== appointmentId)
+              );
             } catch (error) {
               NotificationService.showError('Error', 'No se pudo eliminar la cita');
             }
@@ -456,6 +474,21 @@ export default function ManageAppointments({ navigation }) {
       </Text>
     </View>
   );
+
+  // Si acceso denegado, muestra mensaje
+  if (accessDenied) {
+    return (
+      <View style={[GlobalStyles.container, GlobalStyles.center]}>
+        <Ionicons name="shield-outline" size={64} color={Colors.error} />
+        <Text style={[GlobalStyles.text, { color: Colors.error, marginTop: 16, textAlign: 'center' }]}>
+          Acceso denegado
+        </Text>
+        <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary, textAlign: 'center' }]}>
+          No tienes permisos para gestionar citas.
+        </Text>
+      </View>
+    );
+  }
 
   // Muestra indicador de carga al iniciar
   if (isLoading) {

@@ -31,14 +31,38 @@ export const AuthProvider = ({ children }) => {
           setUser(response.data.usuario);
           setToken(storedToken);
         } else {
-          // Si el token ya no es válido, se elimina del almacenamiento
-          await AsyncStorage.removeItem('token');
+          // Si el token ya no es válido, intenta refrescar
+          try {
+            await authAPI.refresh();
+            // Reintenta obtener el usuario
+            const retryResponse = await authAPI.me();
+            if (retryResponse.data.success) {
+              setUser(retryResponse.data.usuario);
+              setToken(storedToken);
+            } else {
+              await AsyncStorage.removeItem('token');
+            }
+          } catch (refreshError) {
+            await AsyncStorage.removeItem('token');
+          }
         }
       }
     } catch (error) {
-      // Si hay un error al validar el token, se elimina para evitar sesiones corruptas
+      // Si hay un error al validar el token, intenta refrescar
       console.log('Error checking auth state:', error);
-      await AsyncStorage.removeItem('token');
+      try {
+        await authAPI.refresh();
+        // Reintenta obtener el usuario
+        const retryResponse = await authAPI.me();
+        if (retryResponse.data.success) {
+          setUser(retryResponse.data.usuario);
+          setToken(await AsyncStorage.getItem('token'));
+        } else {
+          await AsyncStorage.removeItem('token');
+        }
+      } catch (refreshError) {
+        await AsyncStorage.removeItem('token');
+      }
     } finally {
       // Indica que ya terminó la verificación del estado de autenticación
       setIsLoading(false);

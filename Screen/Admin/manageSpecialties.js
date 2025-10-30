@@ -14,9 +14,11 @@ import { Colors } from '../../src/Components/Colors';
 import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
 import { specialtyAPI } from '../../src/Services/conexion';
+import { useAuth } from '../../src/Context/AuthContext';
 
 // Componente principal que gestiona las especialidades médicas
 export default function ManageSpecialties({ navigation }) {
+  const { isAdmin } = useAuth();
 
   // 🔹 Estados del componente
   const [specialties, setSpecialties] = useState([]); // Lista de especialidades
@@ -26,10 +28,17 @@ export default function ManageSpecialties({ navigation }) {
   const [newSpecialtyName, setNewSpecialtyName] = useState(''); // Nombre de nueva especialidad
   const [newSpecialtyDescription, setNewSpecialtyDescription] = useState(''); // Descripción
   const [isSubmitting, setIsSubmitting] = useState(false); // Controla el botón mientras se envía
+  const [accessDenied, setAccessDenied] = useState(false); // Estado para acceso denegado
 
   //  useEffect para cargar las especialidades al iniciar la pantalla
   useEffect(() => {
-    fetchSpecialties();
+    if (isAdmin()) {
+      fetchSpecialties();
+    } else {
+      setAccessDenied(true);
+      setIsLoading(false);
+      NotificationService.showError('Acceso denegado', 'No tienes permisos para acceder a esta función.');
+    }
   }, []);
 
   //  Función para obtener la lista de especialidades desde el backend
@@ -251,6 +260,21 @@ export default function ManageSpecialties({ navigation }) {
       </TouchableOpacity>
     </View>
   );
+
+  // Si acceso denegado, muestra mensaje
+  if (accessDenied) {
+    return (
+      <View style={[GlobalStyles.container, GlobalStyles.center]}>
+        <Ionicons name="shield-outline" size={64} color={Colors.error} />
+        <Text style={[GlobalStyles.text, { color: Colors.error, marginTop: 16, textAlign: 'center' }]}>
+          Acceso denegado
+        </Text>
+        <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary, textAlign: 'center' }]}>
+          No tienes permisos para gestionar especialidades.
+        </Text>
+      </View>
+    );
+  }
 
   // Muestra un indicador de carga mientras se obtienen las especialidades
   if (isLoading) {

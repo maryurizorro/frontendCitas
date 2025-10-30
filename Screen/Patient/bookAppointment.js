@@ -14,7 +14,7 @@ import {
 import { Colors } from '../../src/Components/Colors';
 import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
-import { appointmentAPI, specialtyAPI, userAPI } from '../../src/Services/conexion';
+import { appointmentAPI, specialtyAPI, userAPI, scheduleAPI } from '../../src/Services/conexion';
 
 export default function BookAppointment({ navigation }) {
   // Estados para manejar los datos y la interfaz
@@ -53,6 +53,18 @@ export default function BookAppointment({ navigation }) {
       setSelectedDoctor('');
     }
   }, [selectedSpecialty]);
+
+  // Forzar revalidación cuando cambian los doctores (después de cambios de horario)
+  useEffect(() => {
+    if (selectedDoctor && selectedDate && selectedTime) {
+      // Reset availability state when doctors change to force revalidation
+      setIsAvailable(null);
+      // Small delay to ensure state update before validation
+      setTimeout(() => {
+        validateDoctorAvailability();
+      }, 100);
+    }
+  }, [doctors]);
 
   // Validar disponibilidad cuando cambian fecha, hora o doctor
   useEffect(() => {
@@ -93,6 +105,8 @@ export default function BookAppointment({ navigation }) {
       if (response.data.success) {
         const doctorsData = response.data.data || [];
         console.log('Doctors found:', doctorsData.length);
+
+        // No necesitamos precargar horarios aquí, se validarán en tiempo real desde la BD
         setDoctors(doctorsData);
         setPickerKey(prev => prev + 1); // Forzar actualización del selector
       } else {
@@ -114,16 +128,16 @@ export default function BookAppointment({ navigation }) {
     }
 
     try {
-      // Usar el endpoint de médicos disponibles para validar
-      const availabilityData = {
+      // Verificar disponibilidad usando la API del backend que consulta la base de datos actual
+      const appointmentCheckData = {
         specialty_id: selectedSpecialty,
-        appointment_date: selectedDate.toISOString().split('T')[0] + ' ' + selectedTime + ':00'
+        appointment_date: selectedDate.toLocaleDateString('en-CA') + ' ' + selectedTime + ':00'
       };
 
-      const response = await appointmentAPI.getAvailableDoctors(availabilityData);
+      const availabilityResponse = await appointmentAPI.getAvailableDoctors(appointmentCheckData);
 
-      if (response.data.success) {
-        const availableDoctors = response.data.data || [];
+      if (availabilityResponse.data.success) {
+        const availableDoctors = availabilityResponse.data.data || [];
         const isDoctorAvailable = availableDoctors.some(doctor => doctor.id == selectedDoctor);
         setIsAvailable(isDoctorAvailable);
       } else {
@@ -193,7 +207,7 @@ export default function BookAppointment({ navigation }) {
       const appointmentData = {
         doctor_id: selectedDoctor,
         specialty_id: selectedSpecialty,
-        date: selectedDate.toISOString().split('T')[0], // Solo la parte de la fecha
+        date: selectedDate.toISOString().split('T')[0],
         time: selectedTime,
         notes: notes.trim() || null,
         status: 'pending'
@@ -424,4 +438,5 @@ export default function BookAppointment({ navigation }) {
     </ScrollView>
   );
 }
+
 

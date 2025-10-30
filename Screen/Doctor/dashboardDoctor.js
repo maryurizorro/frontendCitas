@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   Text,
@@ -10,8 +11,11 @@ import {
 } from "react-native";
 import { Colors } from "../../src/Components/Colors";
 import { GlobalStyles } from "../../src/Components/Styles";
+import { NotificationService } from "../../src/Components/NotificationService";
 import { useAuth } from "../../src/Context/AuthContext";
 import { appointmentAPI, userAPI } from "../../src/Services/conexion";
+import * as Notifications from 'expo-notifications';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Pantalla principal del doctor: muestra su información, citas del día, próximas citas y accesos rápidos
 export default function DashboardDoctor({ navigation }) {
@@ -26,37 +30,95 @@ export default function DashboardDoctor({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [doctorCount, setDoctorCount] = useState(0);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [lastPendingCount, setLastPendingCount] = useState(0); // Para rastrear cambios en citas pendientes
+  const [hasShownInitialNotification, setHasShownInitialNotification] = useState(false); // Para mostrar notificación solo una vez
+  const [notificationShown, setNotificationShown] = useState(false); // Para controlar si ya se mostró la notificación en esta sesión
 
-  // useEffect que carga perfil y citas al iniciar la pantalla
-  useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        // Llama al backend para obtener perfil del usuario
-        const response = await userAPI.getProfile();
-        if (response?.data?.success) {
-          setUser(response.data.data);
-        } else {
-          setUser(authUser ?? null);
-        }
-      } catch (error) {
-        console.log("Error fetching profile:", error);
-        setUser(authUser ?? null);
-      } finally {
-        setIsLoadingProfile(false);
-      }
-    };
 
-    // Si hay usuario autenticado, carga perfil y datos
-    if (authUser) {
-      fetchProfile();
-    } else {
-      setIsLoadingProfile(false);//carga ap
+   // ⏰ Programar una notificación de prueba
+  const programarNotificacion = async () => {
+    const { status } = await Notifications.getPermissionsAsync();
+    const preferencia = await AsyncStorage.getItem('notificaciones_activas');
+    if (status !== 'granted' || preferencia !== 'true') {
+      Alert.alert('⚠️ No tiene permisos para recibir notificaciones');
+      return;
     }
 
-    // Carga las citas y el conteo de doctores
-    fetchAppointments();//trae
-    fetchDoctorCount();
-  }, [authUser]);
+   const trigger = new Date(Date.now() + 1000); // Notificación en 1 segundo
+
+try {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: '🩺 ¡Bienvenido, Doctor!',
+      body: 'Tienes citas pendientes por revisar. Por favor, verifica tu agenda para hoy 📅',
+      sound: true,
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+      vibrate: [0, 250, 250, 250],
+    },
+    trigger,
+  });
+
+  Alert.alert('✅ Notificación enviada', 'Revisa tus citas pendientes.');
+} catch (error) {
+  Alert.alert('❌ Error al programar la notificación', error.message);
+}
+};
+  // useEffect que carga perfil y citas al iniciar la pantalla
+   useEffect(() => {
+     const fetchProfile = async () => {
+       try {
+         // Llama al backend para obtener perfil del usuario
+         const response = await userAPI.getProfile();
+         if (response?.data?.success) {
+           setUser(response.data.data);
+         } else {
+           console.log("Error: respuesta no exitosa al obtener perfil");
+           setUser(authUser ?? null);
+         }
+       } catch (error) {
+         console.log("Error fetching profile:", error);
+         // No mostrar alerta para el perfil, usar datos del contexto como fallback
+         setUser(authUser ?? null);
+       } finally {
+         setIsLoadingProfile(false);
+       }
+     };
+
+     // Si hay usuario autenticado, carga perfil y datos
+     if (authUser) {
+       fetchProfile();
+     } else {
+       setIsLoadingProfile(false);//carga ap
+     }
+
+     // Carga las citas y el conteo de doctores
+     fetchAppointments();//trae
+     fetchDoctorCount();
+
+     // Configurar polling para verificar nuevas citas pendientes cada 30 segundos
+     const pollingInterval = setInterval(async () => {
+       if (authUser?.role === 'doctor') {
+         try {
+           const response = await appointmentAPI.getDoctorAppointments();
+           if (response?.data?.success) {
+             const pendingCount = response.data.pending_count || 0;
+             // Solo mostrar notificación si hay nuevas citas pendientes (no mostrar en polling)
+             setLastPendingCount(pendingCount);
+           } else {
+             console.log("Error en polling: respuesta no exitosa");
+           }
+         } catch (error) {
+           console.log("Error polling appointments:", error);
+           // No mostrar alerta en polling para evitar spam
+         }
+       }
+     }, 30000); // 30 segundos
+
+     // Limpiar el intervalo cuando el componente se desmonte
+     return () => clearInterval(pollingInterval);
+   }, [authUser]);
+
+
 
   // Obtiene las citas del doctor
   const fetchAppointments = async () => {
@@ -64,13 +126,24 @@ export default function DashboardDoctor({ navigation }) {
       const response = await appointmentAPI.getDoctorAppointments();
       if (response?.data?.success) {
         const appointments = response.data.data || [];
-        const today = new Date().toISOString().split("T")[0];
+        const pendingCount = response.data.pending_count || 0;
+        const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+
+        // Verificar si hay nuevas citas pendientes y mostrar notificación (solo una vez al entrar)
+        if (pendingCount > 0 && !notificationShown) {
+          // Solo mostrar notificación cuando entra por primera vez y hay citas pendientes
+          NotificationService.showDoctorPendingAppointmentsNotification(pendingCount);
+          setNotificationShown(true);
+        }
+        setLastPendingCount(pendingCount);
 
         // Filtra citas del día
         const todayApts = appointments.filter((apt) => {
-          const aptDate = new Date(apt.appointment_date).toISOString().split("T")[0];
+          const aptDate = new Date(apt.appointment_date).toLocaleDateString('en-CA');
           return aptDate === today;
         });
+
+
         setTodayAppointments(todayApts);
 
         // Filtra próximas citas dentro de 7 días
@@ -82,11 +155,13 @@ export default function DashboardDoctor({ navigation }) {
         });
         setUpcomingAppointments(upcoming.slice(0, 5));
       } else {
+        Alert.alert('Error', 'No se pudieron cargar las citas. Inténtalo de nuevo.');
         setTodayAppointments([]);
         setUpcomingAppointments([]);
       }
     } catch (error) {
       console.log("Error fetching appointments:", error);
+      Alert.alert('Error', 'No se pudieron cargar las citas. Verifica tu conexión a internet.');
       setTodayAppointments([]);
       setUpcomingAppointments([]);
     } finally {
@@ -103,15 +178,22 @@ export default function DashboardDoctor({ navigation }) {
       }
     } catch (error) {
       console.log("Error fetching doctor count:", error);
+      // No mostrar alerta para el conteo de doctores, ya que es informativo
     }
   };
 
   // Función para refrescar los datos al deslizar hacia abajo
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchAppointments();
-    await fetchDoctorCount();
-    setRefreshing(false);
+    try {
+      await fetchAppointments();
+      await fetchDoctorCount();
+    } catch (error) {
+      console.log("Error refreshing data:", error);
+      Alert.alert('Error', 'No se pudieron actualizar las citas. Inténtalo de nuevo.');
+    } finally {
+      setRefreshing(false);
+    }
   };
 
 

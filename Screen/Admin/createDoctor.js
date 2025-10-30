@@ -16,22 +16,31 @@ import { Colors } from '../../src/Components/Colors';
 import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
 import { userAPI, specialtyAPI } from '../../src/Services/conexion';
+import { useAuth } from '../../src/Context/AuthContext';
 
 // Componente principal para crear un nuevo doctor
 export default function CreateDoctor({ navigation }) {
-  // Estados del formulario
-  const [name, setName] = useState(''); 
-  const [surname, setSurname] = useState(''); 
-  const [email, setEmail] = useState(''); 
-  const [password, setPassword] = useState(''); 
-  const [password_confirmation, setPasswordConfirmation] = useState(''); 
-  const [specialty_id, setSpecialtyId] = useState(''); 
-  const [isLoading, setIsLoading] = useState(false); 
-  const [specialties, setSpecialties] = useState([]); 
-  const [loadingSpecialties, setLoadingSpecialties] = useState(true); 
+  const { isAdmin } = useAuth();
 
-  // Carga las especialidades al montar el componente
+  // Estados del formulario
+  const [name, setName] = useState('');
+  const [surname, setSurname] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [password_confirmation, setPasswordConfirmation] = useState('');
+  const [specialty_id, setSpecialtyId] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [specialties, setSpecialties] = useState([]);
+  const [loadingSpecialties, setLoadingSpecialties] = useState(true);
+  const [accessDenied, setAccessDenied] = useState(false); // Estado para acceso denegado
+
+  // useEffect para verificar permisos y cargar especialidades
   useEffect(() => {
+    if (!isAdmin()) {
+      setAccessDenied(true);
+      NotificationService.showError('Acceso denegado', 'No tienes permisos para crear doctores.');
+      return;
+    }
     loadSpecialties();
   }, []);
 
@@ -138,6 +147,20 @@ export default function CreateDoctor({ navigation }) {
   };
 
   // Render del componente
+  if (accessDenied) {
+    return (
+      <View style={[GlobalStyles.container, GlobalStyles.center]}>
+        <Ionicons name="shield-outline" size={64} color={Colors.error} />
+        <Text style={[GlobalStyles.text, { color: Colors.error, marginTop: 16, textAlign: 'center' }]}>
+          Acceso denegado
+        </Text>
+        <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary, textAlign: 'center' }]}>
+          No tienes permisos para crear doctores.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={GlobalStyles.container}
@@ -238,31 +261,25 @@ export default function CreateDoctor({ navigation }) {
           </View>
 
           {/* Campo: Especialidad médica */}
-          <View style={{ marginBottom: 16 }}>
-            <Text style={[GlobalStyles.textSmall, { marginBottom: 8, fontWeight: '600' }]}>
-              Especialidad médica
-            </Text>
-            <View style={[GlobalStyles.input, { paddingVertical: 0 }]}>
-              {loadingSpecialties ? (
-                // Muestra un indicador de carga mientras se obtienen las especialidades
-                <View style={{ height: 50, justifyContent: 'center', alignItems: 'center' }}>
-                  <ActivityIndicator size="small" color={Colors.primary} />
-                </View>
-              ) : (
-                // Lista desplegable de especialidades
-                <Picker
-                  selectedValue={specialty_id}
-                  onValueChange={setSpecialtyId}
-                  style={{ height: 50 }}
-                >
-                  <Picker.Item label="Seleccionar especialidad" value="" />
-                  {specialties.map((s) => (
-                    <Picker.Item key={s.id} label={s.name} value={s.id.toString()} />
-                  ))}
-                </Picker>
-              )}
-            </View>
-          </View>
+          {/* Selector de especialidad médica */}
+                  <View style={{ marginBottom: 20 }} key="specialty-selector">
+                    <Text style={[GlobalStyles.textSmall, { marginBottom: 8, fontWeight: '600' }]}>
+                      Especialidad médica *
+                    </Text>
+                    <View style={[GlobalStyles.input, { paddingVertical: 0 }]}>
+                      <Picker
+                        selectedValue={specialty_id}
+                        onValueChange={(itemValue) => setSpecialtyId(itemValue)}
+                        style={{ height: 50, color: Colors.textPrimary }}
+                        itemStyle={{ color: Colors.textPrimary }}
+                      >
+                        <Picker.Item label="Selecciona una especialidad" value="" />
+                        {specialties.map((specialty) => (
+                          <Picker.Item key={`specialty-${specialty.id}`} label={specialty.name} value={specialty.id} />
+                        ))}
+                      </Picker>
+                    </View>
+                  </View>
         </View>
 
         {/* Botón para crear doctor */}

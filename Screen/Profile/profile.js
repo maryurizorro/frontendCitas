@@ -1,32 +1,27 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState, useEffect } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
   Switch,
-  Button
+  StyleSheet,
 } from 'react-native';
 import { Colors } from '../../src/Components/Colors';
 import { NotificationService } from '../../src/Components/NotificationService';
-import { GlobalStyles } from '../../src/Components/Styles';
 import { useAuth } from '../../src/Context/AuthContext';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 
-export default function Profile({ navigation }) {
+export default function Profile() {
   const { user, logout } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
-
-  // 🔔 Estados para las notificaciones
   const [permisoNotificaciones, setPermisoNotificaciones] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // 🔍 Verificar permisos
   const checkPermisos = async () => {
     const { status } = await Notifications.getPermissionsAsync();
     const preferencia = await AsyncStorage.getItem('notificaciones_activas');
@@ -44,7 +39,6 @@ export default function Profile({ navigation }) {
     }, [])
   );
 
-  // 🧠 Activar o desactivar notificaciones
   const toggleSwitch = async (valor) => {
     if (valor) {
       const { status } = await Notifications.requestPermissionsAsync();
@@ -64,7 +58,6 @@ export default function Profile({ navigation }) {
     }
   };
 
-  // ⏰ Programar una notificación de prueba
   const programarNotificacion = async () => {
     const { status } = await Notifications.getPermissionsAsync();
     const preferencia = await AsyncStorage.getItem('notificaciones_activas');
@@ -88,7 +81,6 @@ export default function Profile({ navigation }) {
     }
   };
 
-  // 🔴 Cerrar sesión
   const handleLogout = () => {
     Alert.alert(
       'Cerrar sesión',
@@ -108,196 +100,216 @@ export default function Profile({ navigation }) {
             } finally {
               setIsLoading(false);
             }
-          }
-        }
+          },
+        },
       ]
     );
   };
 
-  // 🎭 Roles
   const getRoleText = (role) => {
     switch (role) {
-      case 'admin': return 'Administrador';
-      case 'doctor': return 'Doctor';
-      case 'patient': return 'Paciente';
-      default: return role;
-    }
-  };
-
-  const getRoleColor = (role) => {
-    switch (role) {
-      case 'admin': return Colors.error;
-      case 'doctor': return Colors.success;
-      case 'patient': return Colors.primary;
-      default: return Colors.textSecondary;
+      case 'admin':
+        return 'Administrador';
+      case 'doctor':
+        return 'Doctor';
+      case 'patient':
+        return 'Paciente';
+      default:
+        return role;
     }
   };
 
   const getRoleIcon = (role) => {
     switch (role) {
-      case 'admin': return 'shield-checkmark';
-      case 'doctor': return 'medical';
-      case 'patient': return 'person';
-      default: return 'person';
+      case 'admin':
+        return 'shield-checkmark';
+      case 'doctor':
+        return 'medical';
+      case 'patient':
+        return 'person';
+      default:
+        return 'person';
     }
   };
 
-  // 🔁 Pantalla principal
   return (
-    <ScrollView style={GlobalStyles.container} showsVerticalScrollIndicator={false}>
-      {/* Header del perfil */}
-      <View style={[GlobalStyles.card, GlobalStyles.backgroundPastelBlue]}>
-        <View style={[GlobalStyles.center, { marginBottom: 20 }]}>
-          <View style={[GlobalStyles.backgroundPastelPurple, { 
-            width: 100, 
-            height: 100, 
-            borderRadius: 50, 
-            ...GlobalStyles.center 
-          }]}>
-            <Ionicons name={getRoleIcon(user?.role)} size={50} color={Colors.primary} />
-          </View>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Encabezado del perfil */}
+      <View style={styles.header}>
+        <View style={styles.avatar}>
+          <Ionicons name={getRoleIcon(user?.role)} size={60} color="#4F46E5" />
         </View>
-
-        <View style={[GlobalStyles.center, { marginBottom: 16 }]}>
-          <Text style={[GlobalStyles.title, { marginBottom: 8 }]}>
-            {user?.name} {user?.surname}
-          </Text>
-          <View style={{
-            backgroundColor: getRoleColor(user?.role),
-            paddingHorizontal: 16,
-            paddingVertical: 8,
-            borderRadius: 20,
-            marginBottom: 8
-          }}>
-            <Text style={[GlobalStyles.textSmall, { color: 'white', fontWeight: '600' }]}>
-              {getRoleText(user?.role)}
-            </Text>
-          </View>
-          {user?.specialty && (
-            <Text style={[GlobalStyles.text, { color: Colors.primary, fontWeight: '600' }]}>
-              {user.specialty.name}
-            </Text>
-          )}
-        </View>
+        <Text style={styles.name}>
+          {user?.name} {user?.surname}
+        </Text>
+        <Text style={styles.role}>{getRoleText(user?.role)}</Text>
+        {user?.specialty && (
+          <Text style={styles.specialty}>{user.specialty.name}</Text>
+        )}
       </View>
 
       {/* Información personal */}
-      <View style={GlobalStyles.card}>
-        <Text style={[GlobalStyles.subtitle, { marginBottom: 16 }]}>
-          Información personal
-        </Text>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Información personal</Text>
 
-        <View style={[GlobalStyles.row, { alignItems: 'center', marginBottom: 16 }]}>
-          <View style={[GlobalStyles.backgroundPastelBlue, { 
-            width: 40, height: 40, borderRadius: 20, ...GlobalStyles.center, marginRight: 16
-          }]}>
-            <Ionicons name="mail" size={20} color={Colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary }]}>
-              Correo electrónico
-            </Text>
-            <Text style={[GlobalStyles.text, { fontWeight: '600' }]}>
-              {user?.email}
-            </Text>
-          </View>
+        <View style={styles.item}>
+          <Ionicons name="mail-outline" size={20} color="#4F46E5" />
+          <Text style={styles.itemText}>{user?.email}</Text>
         </View>
 
-        <View style={[GlobalStyles.row, { alignItems: 'center', marginBottom: 16 }]}>
-          <View style={[GlobalStyles.backgroundPastelGreen, { 
-            width: 40, height: 40, borderRadius: 20, ...GlobalStyles.center, marginRight: 16
-          }]}>
-            <Ionicons name="calendar" size={20} color={Colors.success} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary }]}>
-              Miembro desde
+        {user?.created_at && (
+          <View style={styles.item}>
+            <Ionicons name="calendar-outline" size={20} color="#4F46E5" />
+            <Text style={styles.itemText}>
+              Miembro desde: {new Date(user.created_at).toLocaleDateString('es-ES')}
             </Text>
-            <Text style={[GlobalStyles.text, { fontWeight: '600' }]}>
-              {user?.created_at ? new Date(user.created_at).toLocaleDateString('es-ES') : 'N/A'}
-            </Text>
-          </View>
-        </View>
-
-        {user?.specialty && (
-          <View style={[GlobalStyles.row, { alignItems: 'center' }]}>
-            <View style={[GlobalStyles.backgroundPastelYellow, { 
-              width: 40, height: 40, borderRadius: 20, ...GlobalStyles.center, marginRight: 16
-            }]}>
-              <Ionicons name="medical" size={20} color={Colors.warning} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary }]}>
-                Especialidad
-              </Text>
-              <Text style={[GlobalStyles.text, { fontWeight: '600' }]}>
-                {user.specialty.name}
-              </Text>
-            </View>
           </View>
         )}
       </View>
 
-      {/* Configuración de notificaciones */}
-      <View style={GlobalStyles.card}>
-        <Text style={[GlobalStyles.subtitle, { marginBottom: 16 }]}>
-          Notificaciones
-        </Text>
+      {/* Notificaciones */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Notificaciones</Text>
+        <View style={styles.switchRow}>
+          <Text style={styles.itemText}>Estado: </Text>
+          <Switch
+            value={permisoNotificaciones}
+            onValueChange={toggleSwitch}
+            thumbColor={permisoNotificaciones ? '#4F46E5' : '#ccc'}
+            trackColor={{ true: '#C7D2FE', false: '#E5E7EB' }}
+          />
+        </View>
 
-        {loading ? (
-          <ActivityIndicator color={Colors.primary} />
-        ) : (
-          <View style={[GlobalStyles.center]}>
-            <Text style={[GlobalStyles.text, { marginBottom: 10 }]}>
-              Estado: {permisoNotificaciones ? ' Activadas' : ' Desactivadas'}
-            </Text>
-            <Switch
-              value={permisoNotificaciones}
-              onValueChange={toggleSwitch}
-              thumbColor={permisoNotificaciones ? Colors.success : Colors.error}
-            />
-            <View style={{ marginTop: 20 }}>
-              <Button title="Programar notificación de prueba" onPress={programarNotificacion} />
-            </View>
-          </View>
-        )}
+        <TouchableOpacity style={styles.button} onPress={programarNotificacion}>
+          <Text style={styles.buttonText}>Programar notificación de prueba</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Botón de cerrar sesión */}
-      <View style={GlobalStyles.card}>
-        <TouchableOpacity
-          style={[GlobalStyles.buttonSecondary, { 
-            borderColor: Colors.error,
-            opacity: isLoading ? 0.7 : 1
-          }]}
-          onPress={handleLogout}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={Colors.error} />
-          ) : (
-            <>
-              <Ionicons name="log-out-outline" size={20} color={Colors.error} style={{ marginRight: 8 }} />
-              <Text style={[GlobalStyles.buttonTextSecondary, { color: Colors.error }]}>
-                Cerrar sesión
-              </Text>
-            </>
-          )}
+      {/* Cerrar sesión */}
+      <View style={styles.section}>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+          <Ionicons name="log-out-outline" size={20} color="#EF4444" />
+          <Text style={styles.logoutText}>Cerrar sesión</Text>
         </TouchableOpacity>
       </View>
 
       {/* Información de la app */}
-      <View style={[GlobalStyles.card, GlobalStyles.backgroundPastelGreen]}>
-        <View style={[GlobalStyles.center]}>
-          <Text style={[GlobalStyles.text, { fontWeight: '600', marginBottom: 8 }]}>
-            Sistema de Citas Médicas
-          </Text>
-          <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary, textAlign: 'center' }]}>
-            Versión 1.0.0{'\n'}
-            Desarrollado con React Native y Expo
-          </Text>
-        </View>
+      <View style={styles.appInfo}>
+        <Text style={styles.appInfoTitle}>Sistema de Citas Médicas</Text>
+        <Text style={styles.appInfoSubtitle}>Versión 1.0.0</Text>
       </View>
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  header: {
+    alignItems: 'center',
+    backgroundColor: '#EEF2FF',
+    paddingVertical: 30,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  avatar: {
+    backgroundColor: '#E0E7FF',
+    padding: 25,
+    borderRadius: 60,
+    marginBottom: 10,
+  },
+  name: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  role: {
+    fontSize: 15,
+    color: '#6366F1',
+    marginTop: 3,
+  },
+  specialty: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 5,
+  },
+  section: {
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 15,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  itemText: {
+    marginLeft: 10,
+    fontSize: 15,
+    color: '#374151',
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  button: {
+    backgroundColor: '#4F46E5',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  logoutBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  logoutText: {
+    color: '#EF4444',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  appInfo: {
+    alignItems: 'center',
+    marginBottom: 35,
+  },
+  appInfoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  appInfoSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+});

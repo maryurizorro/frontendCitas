@@ -216,8 +216,6 @@ export const NotificationService = {
   },
 
   getExpoPushToken: async () => {
-    if (__DEV__) return null; // En desarrollo no necesitamos token
-
     try {
       const token = await Notifications.getExpoPushTokenAsync();
       console.log('Expo Push Token:', token.data);
@@ -250,6 +248,32 @@ export const NotificationService = {
     } catch (error) {
       console.log('Error setting up notification listener:', error);
       return () => {};
+    }
+  },
+
+  // Notificación para recordatorio de citas pendientes para médicos
+  showDoctorPendingAppointmentsNotification: async (pendingCount) => {
+    const title = '🩺 ¡Atención requerida!';
+    const body = `Tienes ${pendingCount} cita(s) pendiente(s) que requieren tu atención inmediata.`;
+
+    try {
+      // Siempre usar notificación local con vibración fuerte para alertar al médico
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          sound: 'default',
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          vibrate: [0, 500, 200, 500, 200, 500], // Patrón de vibración más intenso
+          sticky: true, // Mantener la notificación visible hasta que se interactúe
+        },
+        trigger: null, // Mostrar inmediatamente
+      });
+
+      // También mostrar toast in-app para reforzar la alerta
+      this.showWarning('Citas Pendientes', `Tienes ${pendingCount} cita(s) pendiente(s) que requieren tu atención.`);
+    } catch (error) {
+      console.log('Error showing doctor pending appointments notification:', error);
     }
   },
 };

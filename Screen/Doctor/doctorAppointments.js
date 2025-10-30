@@ -26,6 +26,11 @@ export default function DoctorAppointments({ navigation }) {
   // Se ejecuta al montar el componente
   useEffect(() => {
     fetchAppointments();
+
+    // No configurar polling en esta pantalla para evitar duplicación de notificaciones
+    // La notificación se muestra solo en dashboardDoctor.js al entrar por primera vez
+
+    return () => {};
   }, []);
 
   // Obtiene las citas del doctor desde la API
@@ -33,11 +38,23 @@ export default function DoctorAppointments({ navigation }) {
     try {
       const response = await appointmentAPI.getDoctorAppointments();
       if (response.data.success) {
-        setAppointments(response.data.data); // Guarda las citas obtenidas
+        setAppointments(response.data.data || []); // Guarda las citas obtenidas
+
+        // Mostrar recordatorio si hay citas pendientes (solo toast in-app, sin notificación del sistema)
+        const pendingCount = response.data.pending_count || 0;
+        if (pendingCount > 0) {
+          // Solo mostrar toast in-app, la notificación del sistema se maneja en dashboardDoctor.js
+          NotificationService.showWarning('Citas Pendientes', `Tienes ${pendingCount} cita(s) pendiente(s) que requieren tu atención.`);
+        }
+      } else {
+        console.log('API response not successful:', response.data);
+        NotificationService.showError('Error', response.data.error || 'No se pudieron cargar las citas');
+        setAppointments([]);
       }
     } catch (error) {
       console.log('Error fetching appointments:', error);
       NotificationService.showError('Error', 'No se pudieron cargar las citas');
+      setAppointments([]);
     } finally {
       setIsLoading(false);
     }
@@ -53,21 +70,33 @@ export default function DoctorAppointments({ navigation }) {
   // Actualiza el estado de una cita (confirmar, cancelar o completar)
   const updateAppointmentStatus = async (appointmentId, newStatus) => {
     try {
-      await appointmentAPI.updateAppointment(appointmentId, { status: newStatus });
-      NotificationService.showSuccess('Estado actualizado', 'El estado de la cita ha sido actualizado');
+      const response = await appointmentAPI.updateAppointment(appointmentId, { status: newStatus });
+      if (response.data.success) {
+        NotificationService.showSuccess('Estado actualizado', 'El estado de la cita ha sido actualizado');
 
-      // Mostrar notificación del sistema con vibración para el paciente
-      if (newStatus === 'confirmed') {
+        // Mostrar notificación del sistema con vibración para el paciente
         const appointment = appointments.find(a => a.id === appointmentId);
         if (appointment) {
-          NotificationService.showAppointmentNotification('confirmed', {
-            doctor_name: appointment.patient?.name + ' ' + appointment.patient?.surname,
-          });
-        }
-      }
+          let notificationType = newStatus;
+          let notificationData = {
+            doctor_name: appointment.doctor?.name + ' ' + appointment.doctor?.surname,
+            patient_name: appointment.patient?.name + ' ' + appointment.patient?.surname,
+          };
 
-      fetchAppointments(); // Refresca la lista
+          NotificationService.showAppointmentNotification(notificationType, notificationData);
+        }
+
+        // Actualizar el estado local sin recargar
+        setAppointments(prevAppointments =>
+          prevAppointments.map(apt =>
+            apt.id === appointmentId ? { ...apt, status: newStatus } : apt
+          )
+        );
+      } else {
+        NotificationService.showError('Error', response.data.error || 'No se pudo actualizar el estado');
+      }
     } catch (error) {
+      console.log('Error updating appointment:', error);
       NotificationService.showError('Error', 'No se pudo actualizar el estado');
     }
   };
@@ -135,7 +164,10 @@ export default function DoctorAppointments({ navigation }) {
             try {
               await appointmentAPI.deleteAppointment(appointmentId);
               NotificationService.showSuccess('Cita eliminada', 'La cita ha sido eliminada completamente del sistema');
-              fetchAppointments();
+              // Actualizar el estado local sin recargar
+              setAppointments(prevAppointments =>
+                prevAppointments.filter(apt => apt.id !== appointmentId)
+              );
             } catch (error) {
               NotificationService.showError('Error', 'No se pudo eliminar la cita');
             }
@@ -186,11 +218,11 @@ export default function DoctorAppointments({ navigation }) {
     }
   };
 
-  // Aplica filtros (todas, hoy, próximas o pasadas)
+  // Aplica filtros (todas, hoy, próximas, pasadas o completadas)
   const getFilteredAppointments = () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
     const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
+    todayDate.setHours(0, 0, 0, 0); // Local midnight
 
     return appointments.filter(appointment => {
       const appointmentDateStr = appointment.appointment_date || appointment.date;
@@ -208,6 +240,8 @@ export default function DoctorAppointments({ navigation }) {
           return appointmentDate > todayDate && appointment.status !== 'cancelled';
         case 'past':
           return appointmentDate < todayDate;
+        case 'completed':
+          return appointment.status === 'completed';
         default:
           return true;
       }
@@ -441,7 +475,8 @@ export default function DoctorAppointments({ navigation }) {
         {filter === 'all' ? 'No tienes citas registradas' :
          filter === 'today' ? 'No tienes citas programadas para hoy' :
          filter === 'upcoming' ? 'No tienes citas próximas' :
-         'No tienes citas pasadas'}
+         filter === 'past' ? 'No tienes citas pasadas' :
+         'No tienes citas completadas'}
       </Text>
     </View>
   );
@@ -467,7 +502,8 @@ export default function DoctorAppointments({ navigation }) {
             { key: 'all', label: 'Todas', icon: 'list' },
             { key: 'today', label: 'Hoy', icon: 'today' },
             { key: 'upcoming', label: 'Próximas', icon: 'calendar' },
-            { key: 'past', label: 'Pasadas', icon: 'time' }
+            { key: 'past', label: 'Pasadas', icon: 'time' },
+            { key: 'completed', label: 'Completadas', icon: 'checkmark-done' }
           ].map((filterOption) => (
             <TouchableOpacity
               key={filterOption.key}

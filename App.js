@@ -13,7 +13,7 @@ export default function App() {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,   // muestra alerta visual
-        shouldPlaySound: false,  // sin sonido
+        shouldPlaySound: true,   // sonido habilitado para alertas médicas
         shouldSetBadge: false,   // no cambia el icono del app
       }),
     });
@@ -42,9 +42,15 @@ export default function App() {
         cleanupPromise.then(cleanup => cleanup && cleanup());
       };
     } else {
-      // En desarrollo, solo configurar vibración
-      const subscription = Notifications.addNotificationReceivedListener(() => {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // En desarrollo, configurar vibración intensa para notificaciones médicas
+      const subscription = Notifications.addNotificationReceivedListener((notification) => {
+        // Vibración más intensa para notificaciones de citas pendientes
+        if (notification.request.content.title.includes('Atención requerida') ||
+            notification.request.content.title.includes('citas pendientes')) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); // Vibración más fuerte
+        } else {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
       });
 
       return () => subscription.remove();

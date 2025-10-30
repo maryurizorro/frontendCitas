@@ -1,5 +1,5 @@
-import { Ionicons } from '@expo/vector-icons'; 
-import React, { useState } from 'react'; 
+import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -11,11 +11,12 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { Colors } from '../../src/Components/Colors'; 
-import { NotificationService } from '../../src/Components/NotificationService'; 
-import { GlobalStyles } from '../../src/Components/Styles'; 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Colors } from '../../src/Components/Colors';
+import { NotificationService } from '../../src/Components/NotificationService';
+import { GlobalStyles } from '../../src/Components/Styles';
 import { useAuth } from '../../src/Context/AuthContext';
-import { authAPI } from '../../src/Services/conexion'; 
+import { authAPI, appointmentAPI } from '../../src/Services/conexion';
 
 export default function LoginScreen({ navigation }) {
   // Estados para guardar datos del formulario
@@ -27,7 +28,9 @@ export default function LoginScreen({ navigation }) {
 
   // Función para manejar el inicio de sesión
   const handleLogin = async () => {
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    const trimmedPassword = password.trim();
+    if (!trimmedEmail || !trimmedPassword) {
       NotificationService.showError('Error', 'Por favor completa todos los campos');
       return;
     }
@@ -35,13 +38,34 @@ export default function LoginScreen({ navigation }) {
     setIsLoading(true); // Activa el indicador de carga
     try {
       // Llama a la API para intentar iniciar sesión
-      const response = await authAPI.login(email, password);
+      const response = await authAPI.login(trimmedEmail, trimmedPassword);
       
       // Si el servidor responde con éxito
       if (response.data.success) {
         // Guarda el usuario y el token en el contexto global
         await login(response.data.usuario, response.data.token);
         NotificationService.showSuccess('¡Bienvenido!', 'Inicio de sesión exitoso');
+
+        // Check if user is doctor and has pending appointments
+        const user = response.data.usuario;
+        if (user.role === 'doctor') {
+          try {
+            const pendingResponse = await appointmentAPI.getPendingAppointments();
+            const pendingCount = pendingResponse.data.length || 0;
+            if (pendingCount > 0) {
+              // Check if notification already shown today
+              const today = new Date().toDateString();
+              const notificationKey = `pendingNotificationShown_${user.id}_${today}`;
+              const alreadyShown = await AsyncStorage.getItem(notificationKey);
+              if (!alreadyShown) {
+                await NotificationService.showDoctorPendingAppointmentsNotification(pendingCount);
+                await AsyncStorage.setItem(notificationKey, 'true');
+              }
+            }
+          } catch (error) {
+            console.log('Error checking pending appointments:', error);
+          }
+        }
 
         // Mostrar notificación push de login exitoso (solo en APK)
         if (!__DEV__) {
@@ -55,11 +79,15 @@ export default function LoginScreen({ navigation }) {
       // Captura errores del servidor o de conexión
       console.log('Login error:', error.response?.data || error.message);
 
-      // Solo mostrar error si NO es credenciales inválidas (que es correcto mostrar)
-      // Los errores 401 de "autenticación" durante login son normales
-      if (error.response?.status === 401 && error.response?.data?.message === 'Credenciales inválidas') {
-        NotificationService.showError('Error', 'Credenciales incorrectas');
-      } else if (error.response?.status !== 401) {
+      // Clear any existing tokens on login failure
+      await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('refresh_token');
+
+      // Mostrar el mensaje específico del backend para errores 401
+      if (error.response?.status === 401) {
+        const errorMessage = error.response?.data?.message || 'Credenciales incorrectas';
+        NotificationService.showError('Error', errorMessage);
+      } else {
         // Otros errores que no sean 401
         const errorMessage = error.response?.data?.message || 'Error al iniciar sesión';
         NotificationService.showError('Error', errorMessage);

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -16,10 +16,12 @@ import { Colors } from '../../src/Components/Colors';
 import { NotificationService } from '../../src/Components/NotificationService';
 import { GlobalStyles } from '../../src/Components/Styles';
 import { userAPI } from '../../src/Services/conexion';
+import { useAuth } from '../../src/Context/AuthContext';
 
 
 // Componente principal para crear administradores
 export default function CreateAdmin({ navigation }) {
+  const { isAdmin } = useAuth();
 
   const [name, setName] = useState('');
   const [surname, setSurname] = useState('');
@@ -29,6 +31,15 @@ export default function CreateAdmin({ navigation }) {
 
   // Estado para manejar el indicador de carga
   const [isLoading, setIsLoading] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false); // Estado para acceso denegado
+
+  // useEffect para verificar permisos
+  useEffect(() => {
+    if (!isAdmin()) {
+      setAccessDenied(true);
+      NotificationService.showError('Acceso denegado', 'No tienes permisos para crear administradores.');
+    }
+  }, []);
 
   const validateForm = () => {
 
@@ -124,6 +135,20 @@ export default function CreateAdmin({ navigation }) {
   };
 
   // --- INTERFAZ DE USUARIO ---
+  if (accessDenied) {
+    return (
+      <View style={[GlobalStyles.container, GlobalStyles.center]}>
+        <Ionicons name="shield-outline" size={64} color={Colors.error} />
+        <Text style={[GlobalStyles.text, { color: Colors.error, marginTop: 16, textAlign: 'center' }]}>
+          Acceso denegado
+        </Text>
+        <Text style={[GlobalStyles.textSmall, { color: Colors.textSecondary, textAlign: 'center' }]}>
+          No tienes permisos para crear administradores.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={GlobalStyles.container}
